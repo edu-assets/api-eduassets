@@ -5,15 +5,25 @@ services:
       dockerfile: Dockerfile
       target: runtime
     image: eduassets-backend:${EDUASSETS_IMAGE_TAG:-local}
-    env_file: .env.production
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3000
       RFID_BRIDGE_ENABLED: "false"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env.production}
+      DIRECT_URL: ${DIRECT_URL:-}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN in .env.production}
+      TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY in .env.production}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
     init: true
     read_only: true
     tmpfs:
@@ -36,8 +46,34 @@ services:
       target: migration
     image: eduassets-backend-migration:${EDUASSETS_IMAGE_TAG:-local}
     env_file: .env.production
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
     environment:
       NODE_ENV: production
       RFID_BRIDGE_ENABLED: "false"
     command: ["npm", "run", "migrate:deploy"]
     profiles: ["release"]
+
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: migration
+    image: eduassets-backend-migration:${EDUASSETS_IMAGE_TAG:-local}
+    env_file: .env.production
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+    environment:
+      NODE_ENV: production
+      RFID_BRIDGE_ENABLED: "false"
+    command: ["npm", "run", "db:seed"]
+    profiles: ["release"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully

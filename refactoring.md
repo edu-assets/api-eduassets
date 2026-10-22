@@ -191,12 +191,7 @@ Keep the lockfile reproducible and verify that clean installation works.
 
 Environment templates and bilingual deployment guides now document a static Vercel frontend and a Docker backend behind Nginx/Cloudflare as a proposed topology. No Oracle host, DNS, TLS, Cloudflare policy, Vercel project, hosted DB or deployment was verified or changed; keep those states clearly labelled as planned until externally verified.
 
-The intended domains are:
-- `eduassets.tech`: public landing page.
-- `app.eduassets.tech`: web application.
-- `api.eduassets.tech`: backend API.
-
-Do not claim that these domains or their deployment configuration are already operational. The separate Astro landing-page project is outside the scope of this backend refactoring.
+No production hostname is authorized or verified by this repository. The operator must choose and verify the DNS names, TLS certificates, and provider configuration before replacing the placeholders in deployment templates. The separate Astro landing-page project is outside the scope of this backend refactoring.
 
 ## 5. Validation requirements
 

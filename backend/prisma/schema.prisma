@@ -25,6 +25,10 @@ model Equipamento {
   categoria            Categoria        @relation(fields: [categoriaId], references: [id])
   itensEmprestimo      ItemEmprestimo[]
   ocorrencias          Ocorrencia[]
+
+  @@index([quantidadeDisponivel])
+  @@index([quantidadeQuebrada])
+  // Database CHECK constraints are declared in the versioned SQL migration (Prisma 6 has no schema attribute for CHECK).
 }
 
 model Responsavel {
@@ -40,6 +44,7 @@ model Usuario {
   login        String      @unique
   passwordHash String
   nivelAcesso  NivelAcesso
+  sessionVersion Int      @default(0)
   rfidTokenHash String?    @unique
   createdAt    DateTime    @default(now())
 }
@@ -66,6 +71,10 @@ model ItemEmprestimo {
   quantidade    Int
   emprestimo    Emprestimo  @relation(fields: [emprestimoId], references: [id])
   equipamento   Equipamento @relation(fields: [equipamentoId], references: [id])
+
+  @@index([emprestimoId])
+  @@index([equipamentoId, emprestimoId])
+  // Positive-quantity CHECK is declared in the versioned SQL migration.
 }
 
 model Ocorrencia {
@@ -82,6 +91,7 @@ model Ocorrencia {
   equipamento    Equipamento      @relation(fields: [equipamentoId], references: [id])
 
   @@index([status])
+  @@index([equipamentoId, status, tipo])
 }
 
 enum NivelAcesso {

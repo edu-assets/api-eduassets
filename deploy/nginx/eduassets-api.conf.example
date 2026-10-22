@@ -1,18 +1,18 @@
 # Template only. Install after supplying a valid origin certificate and verifying
-# the actual API hostname and trusted Cloudflare IP ranges with the operator.
+# the actual API hostname and refreshing the official Cloudflare IP ranges.
 # Cloudflare's current ranges must be maintained in the included file; do not
 # trust CF-Connecting-IP from arbitrary Internet clients.
 server {
     listen 443 ssl http2;
-    server_name api.eduassets.tech;
+    server_name _; # Replace with the operator-verified API hostname before installation.
 
     ssl_certificate     /etc/ssl/eduassets/origin-fullchain.pem;
     ssl_certificate_key /etc/ssl/eduassets/origin-private-key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     client_max_body_size 100k;
 
-    # Create this file from the currently published Cloudflare IP ranges.
-    # Each range must be a set_real_ip_from directive. Do not use 0.0.0.0/0.
+    # Copy the reviewed deploy/nginx/eduassets-cloudflare-realip.conf.example here.
+    # Refresh from Cloudflare's official source before installation; never use 0.0.0.0/0.
     include /etc/nginx/snippets/eduassets-cloudflare-realip.conf;
     real_ip_header CF-Connecting-IP;
     real_ip_recursive on;
@@ -33,6 +33,6 @@ server {
 
 server {
     listen 80;
-    server_name api.eduassets.tech;
+    server_name _; # Replace with the operator-verified API hostname before installation.
     return 301 https://$host$request_uri;
 }

@@ -40,7 +40,7 @@ export async function login(loginStr: string, password: string) {
     throw new AppError(401, 'backend.auth.credenciais_invalidas');
   }
 
-  const token = signToken({ sub: usuario.id, nivelAcesso: usuario.nivelAcesso });
+  const token = signToken({ sub: usuario.id, nivelAcesso: usuario.nivelAcesso, sessionVersion: usuario.sessionVersion });
 
   return {
     token,
@@ -79,9 +79,19 @@ export async function alterarSenha(usuarioId: number, senhaAtual: string, novaSe
   }
 
   const novoHash = await bcrypt.hash(novaSenha, 12);
-  await prisma.usuario.update({
+  const updated = await prisma.usuario.update({
     where: { id: usuario.id },
-    data: { passwordHash: novoHash },
+    data: { passwordHash: novoHash, sessionVersion: { increment: 1 } },
+    select: { id: true, nivelAcesso: true, sessionVersion: true },
+  });
+  // Reissue only the current session at the new version; other sessions are revoked.
+  return signToken({ sub: updated.id, nivelAcesso: updated.nivelAcesso, sessionVersion: updated.sessionVersion });
+}
+
+export async function logout(usuarioId: number): Promise<void> {
+  await prisma.usuario.update({
+    where: { id: usuarioId },
+    data: { sessionVersion: { increment: 1 } },
   });
 }
 
@@ -104,7 +114,7 @@ export async function loginRfid(
     throw new AppError(401, 'backend.auth.cartao_nao_reconhecido');
   }
 
-  const jwtToken = signToken({ sub: usuario.id, nivelAcesso: usuario.nivelAcesso });
+  const jwtToken = signToken({ sub: usuario.id, nivelAcesso: usuario.nivelAcesso, sessionVersion: usuario.sessionVersion });
 
   publicarLoginRfid({
     token: jwtToken,

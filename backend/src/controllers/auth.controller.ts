@@ -14,7 +14,12 @@ export async function me(req: Request, res: Response): Promise<void> {
 
 export async function alterarSenha(req: Request, res: Response): Promise<void> {
   const { senhaAtual, novaSenha } = req.body;
-  await authService.alterarSenha(req.user!.sub, senhaAtual, novaSenha);
+  const token = await authService.alterarSenha(req.user!.sub, senhaAtual, novaSenha);
+  res.json({ token });
+}
+
+export async function logout(req: Request, res: Response): Promise<void> {
+  await authService.logout(req.user!.sub);
   res.status(204).send();
 }
 

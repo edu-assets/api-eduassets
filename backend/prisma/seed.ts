@@ -1,53 +1,47 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { readSeedConfig } from './seedConfig.js';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const senhaAdminInicial = process.env.SEED_ADMIN_PASSWORD;
-  if (!senhaAdminInicial) {
-    console.error('Erro: SEED_ADMIN_PASSWORD não está definida.');
-    process.exit(1);
-  }
-  const senhaHash = await bcrypt.hash(senhaAdminInicial, 12);
+async function main(): Promise<void> {
+  const config = readSeedConfig(process.env);
+  const adminPasswordHash = await bcrypt.hash(config.adminPassword, 12);
 
-  // Idempotente: se já existir, preserva a senha atual sem sobrescrever
+  // Upsert preserves existing accounts and passwords on repeated seed runs.
   await prisma.usuario.upsert({
-    where: { login: 'admin@eduassets.com' },
+    where: { login: config.adminEmail },
     update: {},
     create: {
       nome: 'Initial Administrator',
-      login: 'admin@eduassets.com',
-      passwordHash: senhaHash,
+      login: config.adminEmail,
+      passwordHash: adminPasswordHash,
       nivelAcesso: 'ADMINISTRADOR',
     },
   });
 
-  const senhaEditorInicial = process.env.SEED_EDITOR_PASSWORD;
-  if (senhaEditorInicial) {
-    const senhaEditorHash = await bcrypt.hash(senhaEditorInicial, 12);
-
+  if (config.editorEmail && config.editorPassword) {
+    const editorPasswordHash = await bcrypt.hash(config.editorPassword, 12);
     await prisma.usuario.upsert({
-      where: { login: 'editor@eduassets.com' },
+      where: { login: config.editorEmail },
       update: {},
       create: {
-        nome: 'Synthetic Test Editor',
-        login: 'editor@eduassets.com',
-        passwordHash: senhaEditorHash,
+        nome: 'Initial Editor',
+        login: config.editorEmail,
+        passwordHash: editorPasswordHash,
         nivelAcesso: 'EDITOR',
       },
     });
-  } else {
-    console.log('SEED_EDITOR_PASSWORD não definida — usuário EDITOR de teste não criado.');
   }
 
-  console.log('Seed concluído com sucesso.');
+  console.log('Seed completed. Existing accounts were left unchanged.');
 }
 
 main()
-  .catch((erro) => {
-    console.error('Erro ao rodar o seed:', erro);
-    process.exit(1);
+  .catch(() => {
+    // ORM errors can include connection details; never print environment-derived credentials.
+    console.error('Seed failed. Check required seed settings and database connectivity.');
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();

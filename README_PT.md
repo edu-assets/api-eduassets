@@ -74,14 +74,14 @@ Bridge RFID opcional ── backend /auth/rfid (somente loopback)
 - **Editor:** ações operacionais autenticadas, como empréstimos, devoluções e criação/edição de ocorrências, sujeitas às permissões das rotas.
 - **Administrador:** CRUD administrativo, gerenciamento de contas/senhas e provisionamento de tokens RFID, além das ações operacionais.
 
-O backend é a fronteira de segurança: rotas de alteração usam autenticação/middleware de administrador e JWTs em `Authorization: Bearer <token>`. Os endpoints de convidado usam projeções minimizadas, permitidas por lista de inclusão no servidor; as proteções do frontend servem apenas à usabilidade. A inatividade de administradores expira após 30 minutos por JWT em uma única instância de backend; sessões de editor não usam esse timeout de inatividade. Escalonamento horizontal exige estado de sessão compartilhado. A recuperação de senha não está implementada; um usuário autenticado pode alterar a própria senha por `PATCH /auth/senha`.
+O backend é a fronteira de segurança: rotas de alteração usam autenticação/middleware de administrador e JWTs em `Authorization: Bearer <token>`. Os endpoints de convidado usam projeções minimizadas, permitidas por lista de inclusão no servidor; as proteções do frontend servem apenas à usabilidade. Logout e troca de senha atualizam `sessionVersion` por usuário, persistida no PostgreSQL, invalidando JWTs anteriores entre instâncias; a troca de senha devolve token substituto para o navegador atual. O timeout de inatividade de administradores ainda usa estado local ao processo e só é consistente em uma instância; sessões de editor não usam esse timeout. A recuperação de senha não está implementada; um usuário autenticado pode alterar a própria senha por `PATCH /auth/senha`.
 
 ## Superfície da API do backend
 
 O roteador da aplicação inclui:
 
 - `GET /health` para liveness, `GET /ready` para readiness limitada do PostgreSQL e `GET /` para uma resposta básica de status;
-- `POST /auth/login`, `GET /auth/me` e `PATCH /auth/senha`;
+- `POST /auth/login`, `GET /auth/me`, `POST /auth/logout` e `PATCH /auth/senha`;
 - `POST /auth/rfid` para o fluxo RFID opcional restrito a loopback;
 - rotas CRUD para `/categorias`, `/equipamentos`, `/responsaveis`, `/usuarios`, `/emprestimos` e `/ocorrencias`; e
 - provisionamento/revogação de tokens RFID, somente para administradores, em `/usuarios/:id/rfid-token`.
@@ -117,7 +117,7 @@ Copie o template para o diretório de trabalho do backend e edite-o com valores 
 cp .env.example backend/.env
 ```
 
-No mínimo, defina uma URL PostgreSQL e um segredo JWT exclusivo. O seed também exige `SEED_ADMIN_PASSWORD` (consulte [Configuração do banco de dados](#configuração-do-banco-de-dados)). No desenvolvimento local, `NODE_ENV=development` com o host loopback padrão permite o modo CORS local. `DATABASE_URL` é necessária para iniciar fora de `NODE_ENV=test`; em produção também são exigidos `CORS_ORIGIN` e `TRUST_PROXY` explícitos. Fora desse modo local explícito, defina `CORS_ORIGIN` como uma lista de permissões separadas por vírgula.
+No mínimo, defina uma URL PostgreSQL e um segredo JWT exclusivo. O seed explícito também exige `SEED_ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD` (consulte [Configuração do banco de dados](#configuração-do-banco-de-dados)). No desenvolvimento local, `NODE_ENV=development` com o host loopback padrão permite o modo CORS local. `DATABASE_URL` é necessária para iniciar fora de `NODE_ENV=test`; em produção também são exigidos `CORS_ORIGIN` e `TRUST_PROXY` explícitos. Fora desse modo local explícito, defina `CORS_ORIGIN` como uma lista de permissões separadas por vírgula.
 
 ### Configurar o frontend
 
@@ -137,11 +137,11 @@ Com `backend/.env` configurado e PostgreSQL disponível:
 ```bash
 cd backend
 npx prisma migrate dev
-npx prisma db seed
+npm run db:seed
 cd ..
 ```
 
-O seed é idempotente e **exige `SEED_ADMIN_PASSWORD`**. Ele cria o administrador inicial com a senha fornecida por essa variável; não há senha embutida no código-fonte. `SEED_EDITOR_PASSWORD` é opcional e, quando definida, cria uma conta de editor. Este README não fornece senha de demonstração nem credencial pronta.
+O seed **exige `SEED_ADMIN_EMAIL` válido e `SEED_ADMIN_PASSWORD` forte** (mínimo 16 caracteres, máximo de 72 bytes UTF-8), é idempotente e não sobrescreve contas ou senhas existentes. Para provisionar Editor, informe ambos `SEED_EDITOR_EMAIL` e `SEED_EDITOR_PASSWORD`. Mantenha os valores em arquivo protegido e não rastreado; execute o seed explicitamente após as migrations, verifique o login, altere a senha inicial pelo fluxo autenticado e limpe as variáveis de seed de uso único. O startup da API não cria administrador. Este README não fornece credenciais demo.
 
 Para um ambiente que já tenha migrations versionadas, o backend também oferece:
 
@@ -188,7 +188,7 @@ A URL de desenvolvimento do backend normalmente é `http://127.0.0.1:3000` (ou o
 | `npm run migrate:deploy` | Aplica migrations Prisma existentes. |
 | `npm test` | Executa testes unitários do backend (não exige banco de dados). |
 | `npm run test:integration` | Executa testes de integração e concorrência HTTP/PostgreSQL; exige um banco de teste isolado com migrations aplicadas. |
-| `npm run db:seed` | Aplica o seed idempotente (exige `SEED_ADMIN_PASSWORD`). |
+| `npm run db:seed` | Aplica o seed idempotente (exige `SEED_ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD`). |
 
 ### Frontend
 
@@ -217,8 +217,9 @@ Essas entradas descrevem scripts presentes nos manifestos, não evidenciam uma i
 | `DATABASE_URL` | Conexão PostgreSQL usada pelo Prisma; obrigatória. |
 | `DIRECT_URL` | Conexão PostgreSQL direta opcional para provedores/migrations; se omitida, o Prisma usa `DATABASE_URL` como fallback. |
 | `JWT_SECRET` | Segredo de assinatura JWT; use um valor exclusivo, imprevisível e com pelo menos 32 caracteres. |
-| `SEED_ADMIN_PASSWORD` | Obrigatória apenas ao executar o seed; senha do administrador inicial. |
-| `SEED_EDITOR_PASSWORD` | Senha opcional para o seed; quando presente, cria uma conta de editor. |
+| `SEED_ADMIN_EMAIL` | Email válido obrigatório, usado somente no seed inicial explícito. |
+| `SEED_ADMIN_PASSWORD` | Obrigatória no seed explícito; mínimo 16 caracteres e máximo de 72 bytes UTF-8. |
+| `SEED_EDITOR_EMAIL` / `SEED_EDITOR_PASSWORD` | Par opcional; ambos são necessários para provisionar Editor. |
 | `LOG_LEVEL` | Nível de log Winston; o template usa `info` como padrão. |
 
 ### Frontend

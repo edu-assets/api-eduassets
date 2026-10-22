@@ -13,13 +13,14 @@ const JWT_EXPIRES_IN = '8h';
 export interface AppJwtPayload {
   sub: number;
   nivelAcesso: 'ADMINISTRADOR' | 'EDITOR';
+  sessionVersion: number;
   jti: string;
   iat?: number;
   exp?: number;
 }
 
-export function signToken(payload: Pick<AppJwtPayload, 'sub' | 'nivelAcesso'>): string {
-  return jwt.sign({ ...payload, jti: randomUUID() }, JWT_SECRET, {
+export function signToken(payload: Pick<AppJwtPayload, 'sub' | 'nivelAcesso'> & { sessionVersion?: number }): string {
+  return jwt.sign({ ...payload, sessionVersion: payload.sessionVersion ?? 0, jti: randomUUID() }, JWT_SECRET, {
     algorithm: 'HS256',
     expiresIn: JWT_EXPIRES_IN,
   });
@@ -34,6 +35,8 @@ export function verifyToken(token: string): AppJwtPayload {
     typeof decoded !== 'object' ||
     decoded === null ||
     typeof (decoded as any).sub !== 'number' ||
+    !Number.isSafeInteger((decoded as any).sessionVersion) ||
+    (decoded as any).sessionVersion < 0 ||
     typeof (decoded as any).jti !== 'string' ||
     ((decoded as any).nivelAcesso !== 'ADMINISTRADOR' && (decoded as any).nivelAcesso !== 'EDITOR')
   ) {

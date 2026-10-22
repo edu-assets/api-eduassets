@@ -91,12 +91,11 @@ test('Guest Mode has endpoint-specific allowlists and cannot mutate records', as
   const loans = await api('/emprestimos');
   assert.equal(loans.status, 200);
   const loan = loans.body.find((item: Json) => item.id && (item as any).itens?.some((line: any) => line.equipamentoId === rows.equipmentId));
-  if (loan) {
-    assert.equal(loan.solicitanteNome, 'Convidado');
-    assert.equal(loan.observacao, null);
-    assert.equal(loan.responsavel, null);
-    assert.equal('passwordHash' in loan, false);
-  }
+  assert.ok(loan, 'Expected the synthetic loan to be visible in the Guest allowlisted response.');
+  assert.equal(loan.solicitanteNome, 'Convidado');
+  assert.equal(loan.observacao, null);
+  assert.equal(loan.responsavel, null);
+  assert.equal('passwordHash' in loan, false);
   const equipment = await api('/equipamentos');
   const publicEquipment = equipment.body.find((item: Json) => item.id === rows.equipmentId);
   assert.equal(publicEquipment.modelo, `Synthetic equipment ${marker}`);
@@ -116,6 +115,17 @@ test('Guest Mode has endpoint-specific allowlists and cannot mutate records', as
   await api(`/emprestimos/${sampleLoan.body.id}/devolver`, json('PATCH', { dataDevolucao: new Date().toISOString() }), adminToken);
 });
 
+test('explicitly seeded administrator can authenticate in a configured integration environment', {
+  skip: !process.env.SEED_ADMIN_EMAIL || !process.env.SEED_ADMIN_PASSWORD,
+}, async () => {
+  const result = await api('/auth/login', json('POST', {
+    login: process.env.SEED_ADMIN_EMAIL,
+    password: process.env.SEED_ADMIN_PASSWORD,
+  }));
+  assert.equal(result.status, 200);
+  assert.equal(result.body.user.nivelAcesso, 'ADMINISTRADOR');
+});
+
 test('invalid current password is a business error and the authenticated JWT remains valid', async () => {
   const response = await api('/auth/senha', json('PATCH', { senhaAtual: 'wrong-password', novaSenha: 'new-password-123' }), adminToken);
   assert.equal(response.status, 422);
@@ -125,6 +135,45 @@ test('invalid current password is a business error and the authenticated JWT rem
   assert.equal(invalid.status, 401);
   const missing = await api('/auth/me');
   assert.equal(missing.status, 401);
+});
+
+test('password change revokes other sessions and returns a renewed current JWT', async () => {
+  const priorToken = adminToken;
+  const otherLogin = await api('/auth/login', json('POST', { login, password }));
+  assert.equal(otherLogin.status, 200);
+
+  const changed = await api('/auth/senha', json('PATCH', {
+    senhaAtual: password,
+    novaSenha: 'Synthetic-Updated-Password-02',
+  }), adminToken);
+  assert.equal(changed.status, 200);
+  assert.equal(typeof changed.body.token, 'string');
+  adminToken = changed.body.token;
+
+  assert.equal((await api('/auth/me', {}, priorToken)).status, 401);
+  assert.equal((await api('/auth/me', {}, otherLogin.body.token)).status, 401);
+  assert.equal((await api('/auth/me', {}, adminToken)).status, 200);
+
+  const restored = await api('/auth/senha', json('PATCH', {
+    senhaAtual: 'Synthetic-Updated-Password-02',
+    novaSenha: password,
+  }), adminToken);
+  assert.equal(restored.status, 200);
+  adminToken = restored.body.token;
+});
+
+test('logout revokes every JWT for the account', async () => {
+  const loggedOutToken = adminToken;
+  const otherLogin = await api('/auth/login', json('POST', { login, password }));
+  assert.equal(otherLogin.status, 200);
+
+  assert.equal((await api('/auth/logout', json('POST'), adminToken)).status, 204);
+  assert.equal((await api('/auth/me', {}, loggedOutToken)).status, 401);
+  assert.equal((await api('/auth/me', {}, otherLogin.body.token)).status, 401);
+
+  const nextLogin = await api('/auth/login', json('POST', { login, password }));
+  assert.equal(nextLogin.status, 200);
+  adminToken = nextLogin.body.token;
 });
 
 test('two simultaneous return requests release stock exactly once', async () => {
@@ -163,6 +212,24 @@ test('simultaneous loan edit and return preserve final stock and state', async (
   const equipment = await prisma.equipamento.findUniqueOrThrow({ where: { id: rows.equipmentId } });
   assert.equal(record.status, 'DEVOLVIDO');
   assert.equal(equipment.quantidadeDisponivel, 10);
+});
+
+test('equipment stock edits cannot reduce total below units held by open loans', async () => {
+  const created = await api('/emprestimos', json('POST', {
+    solicitanteNome: `Synthetic stock invariant ${marker}`, responsavelId: rows.responsibleId,
+    itens: [{ equipamentoId: rows.equipmentId, quantidade: 2 }],
+  }), adminToken);
+  assert.equal(created.status, 201);
+  rows.loanIds.push(created.body.id);
+
+  const rejected = await api(`/equipamentos/${rows.equipmentId}`, json('PATCH', { quantidadeTotal: 1 }), adminToken);
+  assert.equal(rejected.status, 409);
+  const afterRejectedUpdate = await prisma.equipamento.findUniqueOrThrow({ where: { id: rows.equipmentId } });
+  assert.equal(afterRejectedUpdate.quantidadeTotal, 10);
+  assert.equal(afterRejectedUpdate.quantidadeDisponivel, 8);
+
+  const returned = await api(`/emprestimos/${created.body.id}/devolver`, json('PATCH', { dataDevolucao: new Date().toISOString() }), adminToken);
+  assert.equal(returned.status, 200);
 });
 
 test('simultaneous occurrence resolution changes inventory exactly once', async () => {

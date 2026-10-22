@@ -74,14 +74,14 @@ Optional RFID bridge ── backend /auth/rfid (loopback-only)
 - **Editor:** authenticated operational actions such as loans, returns and creating/editing occurrences, subject to the route permissions.
 - **Administrator:** administrative CRUD, account/password management and RFID-token provisioning in addition to operational actions.
 
-The backend is the security boundary: mutating routes use authentication/administrator middleware and JWTs in `Authorization: Bearer <token>`. Guest endpoints use minimized, server-side allowlisted projections; frontend guards are for usability only. Administrator inactivity expires after 30 minutes per JWT on one backend instance; editor sessions do not use that idle timeout. Horizontal scaling requires shared session state. Password recovery is not implemented; an authenticated user can change their own password through `PATCH /auth/senha`.
+The backend is the security boundary: mutating routes use authentication/administrator middleware and JWTs in `Authorization: Bearer <token>`. Guest endpoints use minimized, server-side allowlisted projections; frontend guards are for usability only. Logout and password changes update a PostgreSQL-backed per-user `sessionVersion`, invalidating older JWTs across instances; password change returns a replacement JWT for the current browser. Administrator inactivity still uses process-local state and is consistent only on a single backend instance; editor sessions do not use that idle timeout. Password recovery is not implemented; an authenticated user can change their own password through `PATCH /auth/senha`.
 
 ## Backend API surface
 
 The application router includes:
 
 - `GET /health` for liveness, `GET /ready` for bounded PostgreSQL readiness, and `GET /` for a basic status response;
-- `POST /auth/login`, `GET /auth/me` and `PATCH /auth/senha`;
+- `POST /auth/login`, `GET /auth/me`, `POST /auth/logout` and `PATCH /auth/senha`;
 - `POST /auth/rfid` for the optional loopback RFID flow;
 - CRUD routes for `/categorias`, `/equipamentos`, `/responsaveis`, `/usuarios`, `/emprestimos` and `/ocorrencias`; and
 - administrator-only RFID-token provisioning/revocation under `/usuarios/:id/rfid-token`.
@@ -117,7 +117,7 @@ Copy the template to the backend working directory and edit it with real, local 
 cp .env.example backend/.env
 ```
 
-At minimum, set a PostgreSQL URL and a unique JWT secret. The seed also requires `SEED_ADMIN_PASSWORD` (see [Database setup](#database-setup)). In local development, `NODE_ENV=development` with the default loopback host permits the local CORS mode. `DATABASE_URL` is required to start outside `NODE_ENV=test`; production also requires explicit `CORS_ORIGIN` and `TRUST_PROXY`. Outside that explicit local mode, set `CORS_ORIGIN` to a comma-separated allowlist.
+At minimum, set a PostgreSQL URL and a unique JWT secret. The explicit seed also requires `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` (see [Database setup](#database-setup)). In local development, `NODE_ENV=development` with the default loopback host permits the local CORS mode. `DATABASE_URL` is required to start outside `NODE_ENV=test`; production also requires explicit `CORS_ORIGIN` and `TRUST_PROXY`. Outside that explicit local mode, set `CORS_ORIGIN` to a comma-separated allowlist.
 
 ### Configure the frontend
 
@@ -137,11 +137,11 @@ With `backend/.env` configured and PostgreSQL available:
 ```bash
 cd backend
 npx prisma migrate dev
-npx prisma db seed
+npm run db:seed
 cd ..
 ```
 
-The seed is idempotent and **requires `SEED_ADMIN_PASSWORD`**. It creates the initial administrator using the password supplied by that variable; it does not contain a password in source. `SEED_EDITOR_PASSWORD` is optional and, when set, creates an editor account. No demo password or ready-made credential is provided by this README.
+The seed **requires a valid `SEED_ADMIN_EMAIL` and a strong `SEED_ADMIN_PASSWORD`** (minimum 16 characters, maximum 72 UTF-8 bytes), is idempotent, and does not overwrite existing accounts or passwords. Optional editor provisioning requires both `SEED_EDITOR_EMAIL` and `SEED_EDITOR_PASSWORD`. Keep seed values in a protected, untracked env file; explicitly run the seed only after migrations, verify administrator login, change the initial password using the authenticated account flow, and clear the one-time seed variables. API startup never creates an administrator. This README provides no demo credentials.
 
 For an environment that already has committed migrations, the backend also exposes:
 
@@ -188,7 +188,7 @@ The backend's development URL is normally `http://127.0.0.1:3000` (or the config
 | `npm run migrate:deploy` | Applies existing Prisma migrations. |
 | `npm test` | Runs backend unit tests (no DB required). |
 | `npm run test:integration` | Runs HTTP/PostgreSQL integration and concurrency tests; requires an isolated migrated test database. |
-| `npm run db:seed` | Applies the idempotent seed (requires `SEED_ADMIN_PASSWORD`). |
+| `npm run db:seed` | Explicitly applies the idempotent seed (requires `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`). |
 
 ### Frontend
 
@@ -217,8 +217,9 @@ These entries describe scripts present in the manifests, not evidence of a compl
 | `DATABASE_URL` | PostgreSQL connection used by Prisma; required. |
 | `DIRECT_URL` | Optional direct PostgreSQL connection for providers/migrations; Prisma falls back to `DATABASE_URL` when omitted. |
 | `JWT_SECRET` | JWT signing secret; use a unique, unpredictable value of at least 32 characters. |
-| `SEED_ADMIN_PASSWORD` | Required only when running the seed; password for the initial administrator. |
-| `SEED_EDITOR_PASSWORD` | Optional seed password; when present, creates an editor account. |
+| `SEED_ADMIN_EMAIL` | Valid email required by the explicit first-time seed. |
+| `SEED_ADMIN_PASSWORD` | Required by the explicit seed; at least 16 characters and at most 72 UTF-8 bytes. |
+| `SEED_EDITOR_EMAIL` / `SEED_EDITOR_PASSWORD` | Optional pair; both must be supplied to seed an editor. |
 | `LOG_LEVEL` | Winston log level; the template defaults to `info`. |
 
 ### Frontend

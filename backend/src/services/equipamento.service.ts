@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma.js';
+import { prisma, runTransaction } from '../lib/prisma.js';
 import { AppError } from '../errors/AppError.js';
 
 export interface EquipamentoCreateInput {
@@ -37,22 +37,36 @@ export async function criarEquipamento(dados: EquipamentoCreateInput) {
 export async function atualizarEquipamento(id: number, dados: EquipamentoUpdateInput) {
   const { quantidadeTotal, quantidadeDisponivel, quantidadeQuebrada } = dados;
 
-  const atual = await prisma.equipamento.findUnique({ where: { id } });
-  if (!atual) {
-    throw new AppError(404, 'backend.equipamentos.nao_encontrado');
-  }
+  return runTransaction(async (tx) => {
+    // Serialize admin stock edits with loan and occurrence inventory updates.
+    await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Equipamento" WHERE id = ${id} FOR UPDATE`;
+    const atual = await tx.equipamento.findUnique({ where: { id } });
+    if (!atual) throw new AppError(404, 'backend.equipamentos.nao_encontrado');
 
-  const totalFinal = quantidadeTotal ?? atual.quantidadeTotal;
-  const disponivelFinal = quantidadeDisponivel ?? atual.quantidadeDisponivel;
-  const quebradaFinal = quantidadeQuebrada ?? atual.quantidadeQuebrada;
+    const totalFinal = quantidadeTotal ?? atual.quantidadeTotal;
+    const disponivelFinal = quantidadeDisponivel ?? atual.quantidadeDisponivel;
+    const quebradaFinal = quantidadeQuebrada ?? atual.quantidadeQuebrada;
+    const emprestados = await tx.itemEmprestimo.aggregate({
+      where: { equipamentoId: id, emprestimo: { status: 'ABERTO' } },
+      _sum: { quantidade: true },
+    });
+    const manutencoesAbertas = await tx.ocorrencia.count({
+      where: { equipamentoId: id, status: 'ABERTO', tipo: 'MANUTENCAO' },
+    });
+    const ocorrenciasQuebradasAbertas = await tx.ocorrencia.count({
+      where: { equipamentoId: id, status: 'ABERTO', tipo: 'QUEBRADO' },
+    });
+    const quantidadeEmprestada = emprestados._sum.quantidade ?? 0;
 
-  if (disponivelFinal + quebradaFinal > totalFinal) {
-    throw new AppError(400, 'backend.equipamentos.soma_invalida');
-  }
+    if (quebradaFinal < ocorrenciasQuebradasAbertas ||
+        disponivelFinal + quebradaFinal + quantidadeEmprestada + manutencoesAbertas > totalFinal) {
+      throw new AppError(409, 'backend.equipamentos.quantidade_em_uso');
+    }
 
-  return prisma.equipamento.update({
-    where: { id },
-    data: { quantidadeTotal, quantidadeDisponivel, quantidadeQuebrada },
-    include: { categoria: true },
+    return tx.equipamento.update({
+      where: { id },
+      data: { quantidadeTotal, quantidadeDisponivel, quantidadeQuebrada },
+      include: { categoria: true },
+    });
   });
 }
