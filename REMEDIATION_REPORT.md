@@ -18,7 +18,7 @@ No sandbox, exclusivamente com dados e credenciais sintéticos:
 - Backend: 24 testes unitários, build TypeScript e `prisma validate` aprovados; a suíte de integração passou em 9/9 casos.
 - PostgreSQL 16 local descartável: as 6 migrations aplicaram do zero; seed executado duas vezes. Uma segunda execução com outra senha não substituiu a senha cadastrada, confirmada pelo teste de login. Cobertos Guest DTOs/negação, logout e troca de senha revogáveis, estoque e concorrência de empréstimos/ocorrências.
 - `tsc --noEmit -p tsconfig.integration.json`, parse Python/JSON/YAML, `sh -n` dos scripts e `git diff --check` passaram. O PDF atualizado contém 17 páginas e foi inspecionado visualmente.
-- A primeira execução hospedada falhou porque o Prisma Client ainda não tinha sido gerado antes do seed. O workflow foi corrigido; a execução do código (`9842516`) e a execução do commit final (`94ecd2e`) passaram: migration/seed, testes, builds frontend/backend, startup/readiness, targets Docker runtime/migration e validação Compose. [Última execução CI](https://github.com/edu-assets/eduAssets/actions/runs/39806065222).
+- A primeira execução hospedada falhou porque o Prisma Client ainda não tinha sido gerado antes do seed. O workflow foi corrigido e a execução CI do commit de código `9842516` passou: migration/seed, testes, builds frontend/backend, startup/readiness, targets Docker runtime/migration e validação Compose. [Execução CI do código](https://github.com/edu-assets/eduAssets/actions/runs/39805708848).
 
 Os builds aprovados mantêm avisos não bloqueantes já observados: loader/configuração Vite, CSS vazio em `footer.css` e chunk ExcelJS acima de 500 kB. Não foram feitas otimizações fora do escopo de segurança e release.
 
