@@ -67,6 +67,7 @@ export async function criarEmprestimo(dados: EmprestimoCreateInput) {
 
 export async function atualizarItensEmprestimo(id: number, itens: ItemEmprestimoInput[]) {
   return runTransaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Emprestimo" WHERE id = ${id} FOR UPDATE`;
     const emprestimoAtual = await tx.emprestimo.findUnique({ where: { id } });
     if (!emprestimoAtual) {
       throw new AppError(404, 'backend.emprestimos.nao_encontrado');
@@ -113,8 +114,9 @@ export async function atualizarItensEmprestimo(id: number, itens: ItemEmprestimo
   });
 }
 
-export async function devolverEmprestimo(id: number) {
+export async function devolverEmprestimo(id: number, dataDevolucao?: string) {
   return runTransaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Emprestimo" WHERE id = ${id} FOR UPDATE`;
     const emprestimoAtual = await tx.emprestimo.findUnique({ where: { id } });
     if (!emprestimoAtual) {
       throw new AppError(404, 'backend.emprestimos.nao_encontrado');
@@ -122,7 +124,7 @@ export async function devolverEmprestimo(id: number) {
 
     const resultado = await tx.emprestimo.updateMany({
       where: { id, status: 'ABERTO' },
-      data: { status: 'DEVOLVIDO', dataDevolucao: new Date() },
+      data: { status: 'DEVOLVIDO', dataDevolucao: dataDevolucao ? new Date(dataDevolucao) : new Date() },
     });
 
     if (resultado.count === 0) {

@@ -1,0 +1,3 @@
+# Nginx template
+
+`eduassets-api.conf.example` is an operator template, not an active or verified production configuration. Replace the hostname and certificate paths only after DNS/TLS are configured. Before enabling the server block, populate `/etc/nginx/snippets/eduassets-cloudflare-realip.conf` from Cloudflare's currently published IPv4/IPv6 ranges, validate it with `nginx -t`, and restrict inbound origin traffic to those ranges at both the cloud network security layer and the host firewall. The API port must remain loopback-only; do not forward `/ws` or the RFID provisioning port. A direct, non-Cloudflare deployment needs a separately reviewed proxy trust policy.

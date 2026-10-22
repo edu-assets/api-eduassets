@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
+import { publicOccurrence } from '../lib/publicDto.js';
 import * as ocorrenciasService from '../services/ocorrencia.service.js';
 
 export async function listar(req: Request, res: Response): Promise<void> {
   const ocorrencias = await ocorrenciasService.listarOcorrencias();
-  res.json(ocorrencias);
+  res.json(req.user ? ocorrencias : ocorrencias.map(publicOccurrence));
 }
 
 export async function criar(req: Request, res: Response): Promise<void> {

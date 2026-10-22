@@ -16,7 +16,7 @@ async function main() {
     where: { login: 'admin@eduassets.com' },
     update: {},
     create: {
-      nome: 'Thiago da Silva',
+      nome: 'Initial Administrator',
       login: 'admin@eduassets.com',
       passwordHash: senhaHash,
       nivelAcesso: 'ADMINISTRADOR',
@@ -31,7 +31,7 @@ async function main() {
       where: { login: 'editor@eduassets.com' },
       update: {},
       create: {
-        nome: 'Editor de Teste',
+        nome: 'Synthetic Test Editor',
         login: 'editor@eduassets.com',
         passwordHash: senhaEditorHash,
         nivelAcesso: 'EDITOR',

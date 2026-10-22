@@ -1,7 +1,7 @@
 {
   "name": "edu-assets",
   "version": "1.0.0",
-  "description": "<div align=\"center\">\r   <img src=\"frontend/public/assets/img/eduAssets_banner.png\" alt=\"EduAssets banner\" width=\"100%\">\r </div>",
+  "description": "School equipment loan and inventory management application",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -24,5 +24,8 @@
   "homepage": "https://github.com/dasilva-thiago/edu-assets#readme",
   "devDependencies": {
     "concurrently": "^10.0.5"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

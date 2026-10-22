@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { requireAdmin } from '../middlewares/auth.js';
+import { optionalAuth, requireAdmin } from '../middlewares/auth.js';
 import { validateBody, requireIntParam } from '../middlewares/validate.js';
 import { equipamentoCreateSchema, equipamentoUpdateSchema } from '../schemas/index.js';
 import * as equipamentosController from '../controllers/equipamentos.controller.js';
 
 export const equipamentosRouter = Router();
 
-equipamentosRouter.get('/', equipamentosController.listar);
+equipamentosRouter.get('/', optionalAuth, equipamentosController.listar);
 equipamentosRouter.post(
   '/',
   requireAdmin,

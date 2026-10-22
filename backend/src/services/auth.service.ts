@@ -7,6 +7,11 @@ import { publicarLoginRfid } from '../lib/rfidBridge.js';
 import { logger } from '../lib/logger.js';
 
 const RFID_BRIDGE_SECRET = process.env.RFID_BRIDGE_SECRET;
+// Random per-process dummy hash prevents account existence from skipping bcrypt work.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(
+  'eduAssets-dummy-' + require('node:crypto').randomBytes(32).toString('hex'),
+  12
+);
 
 function ehLoopback(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false;
@@ -16,19 +21,18 @@ function ehLoopback(remoteAddress: string | undefined): boolean {
 export async function login(loginStr: string, password: string) {
   const usuario = await prisma.usuario.findUnique({ where: { login: loginStr } });
   if (!usuario) {
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     throw new AppError(401, 'backend.auth.credenciais_invalidas');
   }
 
-  if (!usuario.passwordHash || !usuario.passwordHash.startsWith('$2')) {
-    logger.warn(`Hash de senha inválida para o usuário ${usuario.login}`);
-    throw new AppError(401, 'backend.auth.credenciais_invalidas');
-  }
+  const hashValido = typeof usuario.passwordHash === 'string' && usuario.passwordHash.startsWith('$2');
+  if (!hashValido) logger.warn('Hash de senha inválida encontrado durante autenticação.');
 
   let senhaValida = false;
   try {
-    senhaValida = await bcrypt.compare(password, usuario.passwordHash);
+    senhaValida = await bcrypt.compare(password, hashValido ? usuario.passwordHash : DUMMY_PASSWORD_HASH);
   } catch (error) {
-    logger.error(`Falha ao validar senha do usuário ${usuario.login}:`, { error });
+    logger.error('Falha ao validar hash de senha durante autenticação.', { error });
     throw new AppError(401, 'backend.auth.credenciais_invalidas');
   }
 
@@ -71,7 +75,7 @@ export async function alterarSenha(usuarioId: number, senhaAtual: string, novaSe
 
   const senhaValida = await bcrypt.compare(senhaAtual, usuario.passwordHash);
   if (!senhaValida) {
-    throw new AppError(401, 'backend.auth.senha_atual_incorreta');
+    throw new AppError(422, 'backend.auth.senha_atual_incorreta');
   }
 
   const novoHash = await bcrypt.hash(novaSenha, 12);

@@ -1,0 +1,80 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: eduassets_test
+          POSTGRES_USER: eduassets_test
+          POSTGRES_PASSWORD: eduassets_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eduassets_test -d eduassets_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://eduassets_test:eduassets_test@127.0.0.1:5432/eduassets_test?schema=public
+      JWT_SECRET: synthetic-ci-only-secret-0123456789abcdef
+      NODE_ENV: test
+      HOST: 127.0.0.1
+      PORT: 3000
+      TRUST_PROXY: "0"
+      CORS_ORIGIN: https://app.example.invalid
+      SEED_ADMIN_PASSWORD: Synthetic-CI-Admin-Password-01
+      VITE_API_BASE_URL: https://api.example.invalid
+      VITE_RFID_BRIDGE_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix backend
+      - run: npm ci --prefix frontend
+      - name: Validate Prisma schema without DIRECT_URL
+        run: cd backend && unset DIRECT_URL && npx prisma validate --config prisma.config.ts
+      - run: npm --prefix backend run migrate:deploy
+      - run: npm --prefix backend run db:seed
+      - run: npm --prefix backend test
+      - run: npm --prefix backend run test:integration
+      - run: npm --prefix frontend run typecheck
+      - run: npm --prefix frontend test
+      - run: npm --prefix backend run build
+      - run: npm --prefix frontend run build
+      - name: Verify compiled backend startup and database readiness
+        shell: bash
+        run: |
+          npm --prefix backend start > /tmp/eduassets-backend.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/ready >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/eduassets-backend.log
+          exit 1
+      - name: Build Docker release targets
+        run: |
+          docker build --target runtime -f backend/Dockerfile backend
+          docker build --target migration -f backend/Dockerfile backend
+      - name: Validate deployment templates
+        shell: bash
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('frontend/vercel.json', 'utf8'))"
+          cp .env.production.example .env.production
+          trap 'rm -f .env.production' EXIT
+          docker compose -f docker-compose.production.yml config --quiet

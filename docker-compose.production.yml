@@ -1,0 +1,43 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    image: eduassets-backend:${EDUASSETS_IMAGE_TAG:-local}
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      RFID_BRIDGE_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: migration
+    image: eduassets-backend-migration:${EDUASSETS_IMAGE_TAG:-local}
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      RFID_BRIDGE_ENABLED: "false"
+    command: ["npm", "run", "migrate:deploy"]
+    profiles: ["release"]

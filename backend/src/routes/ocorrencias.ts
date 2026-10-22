@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, requireAdmin } from '../middlewares/auth.js';
+import { optionalAuth, requireAuth, requireAdmin } from '../middlewares/auth.js';
 import { validateBody, requireIntParam } from '../middlewares/validate.js';
 import {
   ocorrenciaCreateSchema,
@@ -10,7 +10,7 @@ import * as ocorrenciasController from '../controllers/ocorrencias.controller.js
 
 export const ocorrenciasRouter = Router();
 
-ocorrenciasRouter.get('/', ocorrenciasController.listar);
+ocorrenciasRouter.get('/', optionalAuth, ocorrenciasController.listar);
 ocorrenciasRouter.post(
   '/',
   requireAuth,

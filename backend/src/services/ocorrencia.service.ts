@@ -74,6 +74,7 @@ export async function atualizarOcorrencia(id: number, dados: OcorrenciaUpdateInp
 
 export async function resolverOcorrencia(id: number, medidasTomadas: string) {
   return runTransaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Ocorrencia" WHERE id = ${id} FOR UPDATE`;
     const ocorrenciaAtual = await tx.ocorrencia.findUnique({ where: { id } });
     if (!ocorrenciaAtual) {
       throw new AppError(404, 'backend.geral.registro_nao_encontrado');
@@ -84,9 +85,14 @@ export async function resolverOcorrencia(id: number, medidasTomadas: string) {
       throw new AppError(409, 'backend.geral.registro_duplicado');
     }
 
-    const resolvida = await tx.ocorrencia.update({
-      where: { id },
+    const claim = await tx.ocorrencia.updateMany({
+      where: { id, status: 'ABERTO' },
       data: { status: 'RESOLVIDO', resolvidoEm: new Date(), medidasTomadas },
+    });
+    if (claim.count !== 1) throw new AppError(409, 'backend.geral.registro_duplicado');
+
+    const resolvida = await tx.ocorrencia.findUniqueOrThrow({
+      where: { id },
       include: ocorrenciaInclude,
     });
 
@@ -106,6 +112,7 @@ export async function resolverOcorrencia(id: number, medidasTomadas: string) {
 
 export async function excluirOcorrencia(id: number) {
   return runTransaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Ocorrencia" WHERE id = ${id} FOR UPDATE`;
     const ocorrencia = await tx.ocorrencia.findUnique({ where: { id } });
     if (!ocorrencia) return;
 

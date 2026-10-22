@@ -1,5 +1,7 @@
 # eduAssets — Backend Architecture Refactoring
 
+> **Status reviewed 2026-10-22:** Repository-side work was implemented incrementally in the current checkout. This file is retained as a historical design/acceptance record, not as evidence of a deployed or production-ready service. See `REMEDIATION_REPORT.md` and the bilingual deployment guides; the CI workflow has been authored but not executed. Environment-specific deployment, PostgreSQL integration, hardware and provider-side validation remain gates.
+
 ## Context
 
 I am refactoring the backend of **eduAssets**, a school equipment loan and inventory management system developed as an educational portfolio project and intended to integrate with **eduStation**, a local kiosk with optional RFID hardware.
@@ -15,7 +17,7 @@ I am refactoring the backend of **eduAssets**, a school equipment loan and inven
 
 Inspect the repository and actual implementation before modifying anything. Existing documentation may contain outdated information; prioritize the current code and the decisions below.
 
-The architecture screenshots attached to the previous conversation illustrate the desired layered structure.
+The original request referenced architecture screenshots from an earlier conversation; those images are not stored in this repository and are not treated as implementation evidence.
 
 ## 1. Target architecture
 
@@ -53,9 +55,9 @@ Responsibilities:
 - **`errors/`**: centralized application errors.
 - **`lib/`**: infrastructure and reusable technical services.
 
-Move `middleware/` to `middlewares/` and update all imports. Move stock business logic from `lib/estoque.ts` to `services/`, preserving its existing atomic behavior.
+Move `middleware/` to `middlewares/` and update all imports. Current stock business logic resides in services (for example `services/estoque.service.ts`) and preserves atomic behavior; no legacy `lib/estoque.ts` migration should be inferred from this historical note.
 
-Follow the project's `skills.md`, `skillsJS.md` and `architectureskills.md` guidelines. Keep feature responsibilities clear, avoid premature abstractions and do not introduce a new framework.
+The original request referenced `skills.md`, `skillsJS.md` and `architectureskills.md`; those files were not found in the current repository checkout. Keep feature responsibilities clear, avoid premature abstractions and do not introduce a new framework.
 
 ## 2. Approved architectural decisions
 
@@ -107,13 +109,13 @@ Automated password recovery by email remains out of scope; users who forget thei
 
 **Guest Mode must remain functional. Do not protect every GET endpoint indiscriminately.**
 
-Replace indiscriminate public GET access with an explicit allowlist of endpoints required for the read-only demonstration.
+Implemented: anonymous GET access is restricted to the current read views and uses endpoint-specific server-side DTO allowlists; `GET /responsaveis` and user-management routes require authentication. Re-review this allowlist before any change to the public UI or payload.
 
 - Public endpoints must return only the fields required by the guest interface.
 - `GET /usuarios` and user-management endpoints must be protected appropriately.
 - Never expose password hashes, RFID tokens, shared secrets or other sensitive information.
 - All write operations must enforce authorization on the backend.
-- The public deployment must use fictitious demonstration data, isolated from any real school or eduStation database.
+- Any public deployment must use synthetic demonstration data in a dedicated database, isolated from any school or eduStation database; no such deployment/database is configured by this repository.
 - Do not introduce a new guest-authentication flow.
 
 Audit the existing routes and frontend usage before defining the allowlist.
@@ -187,7 +189,7 @@ Run the available dependency, type-check and build validations. Fix genuine Type
 
 Keep the lockfile reproducible and verify that clean installation works.
 
-Update `.env.example` and the README to document required environment variables without real secrets. Hosting is not yet configured; the intended direction is a public static frontend and an Oracle Free Tier backend, potentially using Cloudflare. The exact infrastructure configuration must remain documented as planned until verified.
+Environment templates and bilingual deployment guides now document a static Vercel frontend and a Docker backend behind Nginx/Cloudflare as a proposed topology. No Oracle host, DNS, TLS, Cloudflare policy, Vercel project, hosted DB or deployment was verified or changed; keep those states clearly labelled as planned until externally verified.
 
 The intended domains are:
 - `eduassets.tech`: public landing page.

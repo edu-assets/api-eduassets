@@ -27,10 +27,13 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "npm run prisma:generate && tsc",
     "test": "tsx --test tests/**/*.test.ts",
     "start": "node dist/src/server.js",
-    "migrate:deploy": "prisma migrate deploy"
+    "migrate:deploy": "prisma migrate deploy --config prisma.config.ts",
+    "prisma:generate": "prisma generate --config prisma.config.ts",
+    "test:integration": "tsx --test integration-tests/**/*.integration.test.ts",
+    "db:seed": "prisma db seed --config prisma.config.ts"
   },
   "engines": {
     "node": ">=22.12.0"

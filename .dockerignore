@@ -1,0 +1,11 @@
+.git
+.github
+**/node_modules
+**/dist
+**/coverage
+.env
+.env.*
+!.env.example
+!.env.production.example
+npm-debug.log*
+frontend/public/docs/*.pdf

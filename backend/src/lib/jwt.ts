@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 
 const JWT_SECRET_RAW = process.env.JWT_SECRET;
 if (!JWT_SECRET_RAW || JWT_SECRET_RAW.length < 32) {
@@ -12,10 +13,13 @@ const JWT_EXPIRES_IN = '8h';
 export interface AppJwtPayload {
   sub: number;
   nivelAcesso: 'ADMINISTRADOR' | 'EDITOR';
+  jti: string;
+  iat?: number;
+  exp?: number;
 }
 
-export function signToken(payload: AppJwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
+export function signToken(payload: Pick<AppJwtPayload, 'sub' | 'nivelAcesso'>): string {
+  return jwt.sign({ ...payload, jti: randomUUID() }, JWT_SECRET, {
     algorithm: 'HS256',
     expiresIn: JWT_EXPIRES_IN,
   });
@@ -30,6 +34,7 @@ export function verifyToken(token: string): AppJwtPayload {
     typeof decoded !== 'object' ||
     decoded === null ||
     typeof (decoded as any).sub !== 'number' ||
+    typeof (decoded as any).jti !== 'string' ||
     ((decoded as any).nivelAcesso !== 'ADMINISTRADOR' && (decoded as any).nivelAcesso !== 'EDITOR')
   ) {
     throw new Error('Token payload inválido.');

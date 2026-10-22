@@ -5,46 +5,24 @@ import { notFoundHandler } from './middlewares/notFound.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { requestLogger } from './middlewares/requestLogger.js';
 import { securityHeaders, globalRateLimiter } from './middlewares/security.js';
+import { getRuntimeConfig } from './config/runtimeConfig.js';
+import { prisma } from './lib/prisma.js';
+import { checkReadiness } from './lib/readiness.js';
 
 export const app = express();
 
-const isProduction = process.env.NODE_ENV === 'production';
-const HOST = process.env.HOST ?? '127.0.0.1';
-const isLoopbackHost = HOST === 'localhost' || HOST === '127.0.0.1' || HOST === '::1';
-const isLocalDevelopment = process.env.NODE_ENV === 'development' && isLoopbackHost;
-
-/**
- * Trust proxy:
- * - TRUST_PROXY explícito sempre prevalece.
- * - Em produção sem TRUST_PROXY, assume 1 hop como padrão seguro.
- * - Em desenvolvimento local, false.
- */
-const trustProxyEnv = process.env.TRUST_PROXY;
-if (trustProxyEnv !== undefined) {
-  const asNumber = Number(trustProxyEnv);
-  app.set('trust proxy', Number.isNaN(asNumber) ? trustProxyEnv : asNumber);
-} else if (isProduction) {
-  app.set('trust proxy', 1);
-} else {
-  app.set('trust proxy', false);
-}
+const runtimeConfig = getRuntimeConfig();
+const isLocalDevelopment = runtimeConfig.nodeEnv === 'development' &&
+  ['localhost', '127.0.0.1', '::1'].includes(runtimeConfig.host);
+app.set('trust proxy', runtimeConfig.trustProxy);
 
 app.use(securityHeaders);
 
-const allowedOrigins = (process.env.CORS_ORIGIN ?? '')
-  .split(',')
-  .map((o) => o.trim())
-  .filter(Boolean);
-
-if (!isLocalDevelopment && allowedOrigins.length === 0) {
-  throw new Error(
-    'CORS_ORIGIN não definida fora do desenvolvimento local. Configure a variável de ambiente com as origens permitidas (ex: https://eduassets.vercel.app) antes de iniciar o servidor.'
-  );
-}
+const allowedOrigins = runtimeConfig.corsOrigins;
 
 app.use(
   cors({
-    origin: isLocalDevelopment ? true : (allowedOrigins.length > 0 ? allowedOrigins : false),
+    origin: isLocalDevelopment ? true : allowedOrigins,
   })
 );
 
@@ -52,12 +30,19 @@ app.use(requestLogger);
 app.use(express.json({ limit: '100kb' }));
 app.use(globalRateLimiter);
 
-// Endpoint de verificação de integridade / monitoramento
+// Liveness: process is running; deliberately does not depend on PostgreSQL.
 app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
   });
+});
+
+// Readiness: bounded, minimal dependency check; never returns database details.
+app.get('/ready', async (_req, res) => {
+  const ready = await checkReadiness(() => prisma.$queryRaw`SELECT 1`);
+  if (ready) res.json({ status: 'ready' });
+  else res.status(503).json({ status: 'unavailable' });
 });
 
 app.get('/', (_req, res) => {

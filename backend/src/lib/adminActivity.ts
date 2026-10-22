@@ -1,30 +1,18 @@
 /**
- * WARNING: Temporary implementation.
- *
- * Admin inactivity tracking is stored in process memory using a Map and only
- * works correctly when the backend runs as a single instance.
- *
- * In multi-instance deployments (e.g. Render auto-scaling, AWS ECS, Kubernetes),
- * each instance maintains its own inactivity timer, making the 30-minute timeout
- * inconsistent across requests routed to different instances.
- *
- * If the backend is ever scaled horizontally, migrate this state to a shared
- * storage layer (e.g. Redis) before deploying.
+ * Per-process activity cache. Missing cache state fails closed for tokens older
+ * than the idle window; a restart therefore cannot revive an old admin JWT.
+ * Deployments with multiple replicas still require shared state and are not
+ * supported for administrator sessions until that infrastructure is configured.
  */
-
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-const ultimaAtividade = new Map<number, number>();
+const ultimaAtividade = new Map<string, number>();
 
-export function registrarAtividadeAdmin(usuarioId: number): void {
-  ultimaAtividade.set(usuarioId, Date.now());
+export function registrarAtividadeAdmin(jti: string): void {
+  ultimaAtividade.set(jti, Date.now());
 }
 
-export function sessaoAdminExpirada(usuarioId: number): boolean {
-  const ultima = ultimaAtividade.get(usuarioId);
-  if (ultima === undefined) return false; // primeira requisição após login
-  return Date.now() - ultima > IDLE_TIMEOUT_MS;
-}
-
-export function limparAtividadeAdmin(usuarioId: number): void {
-  ultimaAtividade.delete(usuarioId);
+export function sessaoAdminExpirada(jti: string, issuedAt: number | undefined): boolean {
+  const ultima = ultimaAtividade.get(jti);
+  const referencia = ultima ?? (issuedAt === undefined ? Number.NEGATIVE_INFINITY : issuedAt * 1000);
+  return Date.now() - referencia >= IDLE_TIMEOUT_MS;
 }

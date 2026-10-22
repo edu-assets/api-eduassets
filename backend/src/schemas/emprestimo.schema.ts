@@ -20,3 +20,9 @@ export const emprestimoUpdateItensSchema = z.object({
 export type ItemEmprestimoSchemaInput = z.infer<typeof itemEmprestimoSchema>;
 export type EmprestimoCreateSchemaInput = z.infer<typeof emprestimoCreateSchema>;
 export type EmprestimoUpdateItensSchemaInput = z.infer<typeof emprestimoUpdateItensSchema>;
+
+export const emprestimoReturnSchema = z.object({
+  dataDevolucao: z.string().datetime({ offset: true }).optional(),
+});
+
+export type EmprestimoReturnSchemaInput = z.infer<typeof emprestimoReturnSchema>;

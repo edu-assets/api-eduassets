@@ -4,7 +4,6 @@ import { prisma } from '../lib/prisma.js';
 import {
   registrarAtividadeAdmin,
   sessaoAdminExpirada,
-  limparAtividadeAdmin,
 } from '../lib/adminActivity.js';
 
 declare global {
@@ -44,18 +43,20 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   // Se o nível atual no banco é ADMINISTRADOR, aplica o timeout de 30 minutos de inatividade
   if (usuario.nivelAcesso === 'ADMINISTRADOR') {
-    if (sessaoAdminExpirada(usuario.id)) {
-      limparAtividadeAdmin(usuario.id);
+    if (sessaoAdminExpirada(payload.jti, payload.iat)) {
       res.status(401).json({ erro: 'backend.auth.sessao_expirada', sessaoExpirada: true });
       return;
     }
-    registrarAtividadeAdmin(usuario.id);
+    registrarAtividadeAdmin(payload.jti);
   }
 
   // Armazena no req.user o sub e o nível de acesso fresco do banco
   req.user = {
     sub: usuario.id,
     nivelAcesso: usuario.nivelAcesso,
+    jti: payload.jti,
+    iat: payload.iat,
+    exp: payload.exp,
   };
 
   next();
@@ -69,4 +70,13 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     }
     next();
   });
+}
+
+/** Authenticate requests that supply a bearer token while retaining Guest Mode for anonymous reads. */
+export async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!req.headers.authorization) {
+    next();
+    return;
+  }
+  await requireAuth(req, res, next);
 }
