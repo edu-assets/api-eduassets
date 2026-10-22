@@ -28,19 +28,19 @@ Implemented in the selected checkout on 2026-10-22. No deployment, remote databa
 | F6 expired JWT | Fixed | API client broadcasts on every 401; listener clears any authenticated session, not only admins. 403/network errors are unchanged. |
 | F7 selected return date | Not fixed | Current UI/backend contract stores server current time; changing historical date semantics needs a domain decision and backend schema validation. Do not treat the date field as implemented. |
 | D1 Vercel API URL | Partially fixed | Production frontend throws clearly if `VITE_API_BASE_URL` is absent; no Vercel project/build env access for preview verification. |
-| D2 README | Partially fixed | Main and English docs corrected for ExcelJS, CORS, ports, host, RFID flag/env filename. Other embedded localized docs and instructions may still need review. |
+| D2 README and localized documentation | Fixed | The English and Portuguese READMEs, architecture, changelog, data model, user manual, and roadmaps were reconciled against the current source. The bundled PDF manual was regenerated from the bilingual Markdown manuals. |
 | D3 license | Fixed | Root/backend/frontend manifests now match the existing MIT license text. |
-| D4 leftovers/markup | Partially fixed | Fixed malformed attribute in the targeted template. A separate `[cite: 22]` comment remains in `frontend/src/features/cadastros/events.ts` pending confirmation whether it is intended/harmless; no code behavior depends on it. |
+| D4 leftovers/markup | Fixed | Fixed the malformed attribute in the targeted template; a source/docs sweep confirmed that the `[cite: 22]` marker is no longer present outside this historical report entry. |
 | D5 guest action styling | Not addressed | Backend remains authorization boundary; guest-mode affordance/accessibility requires visual/manual product QA. |
 
 ## Changes
 
-`backend/package.json`, `backend/prisma.config.ts`, `backend/src/app.ts`, `backend/src/lib/{jwt,prisma,rfidBridge}.ts`, `backend/src/middlewares/{auth,security}.ts`, `backend/src/server.ts`; `frontend/package.json`, `frontend/vite.config.ts`, `frontend/src/core/{api/{apiClient.ts,apiConfig.ts},auth/sessionTimeout.ts,services/csv.ts,utils/html.ts,i18n/{en,pt}.json}`, `frontend/src/features/{cadastros/events.ts,controle/templates.ts,devolucao/events.ts,exportar/service.ts}`, `frontend/src/tests/{csv.test.ts,html.test.ts}`; root `package.json`, `package-lock.json`; `rpi/rfid/{spi_rfid_reader.py,eduassets-rfid.service}`; `README.md` and `frontend/public/docs/README.md`.
+`backend/package.json`, `backend/prisma.config.ts`, `backend/src/app.ts`, `backend/src/lib/{jwt,prisma,rfidBridge}.ts`, `backend/src/middlewares/{auth,security}.ts`, `backend/src/server.ts`; `frontend/package.json`, `frontend/vite.config.ts`, `frontend/src/core/{api/{apiClient.ts,apiConfig.ts},auth/sessionTimeout.ts,services/csv.ts,utils/html.ts,i18n/{en,pt}.json}`, `frontend/src/features/{cadastros/events.ts,controle/templates.ts,devolucao/events.ts,exportar/service.ts}`, `frontend/src/tests/{csv.test.ts,html.test.ts}`; root `package.json`, `package-lock.json`; `rpi/rfid/{spi_rfid_reader.py,eduassets-rfid.service}`; `README.md`, `frontend/public/docs/README.md`, `frontend/public/docs/LEIAME.md`, and the bilingual documentation set under `frontend/public/docs/`.
 
 ## Validation actually run
 
 - Node `v22.13.0`, npm `10.9.2`, Python `3.12.3`; Prisma CLI `6.19.3`.
-- `npm --prefix frontend test`: 26 passed across 5 files.
+- `npm --prefix frontend test`: 27 passed across 5 files.
 - `npm --prefix frontend run typecheck`: passed.
 - `npm --prefix frontend run build`: passed (existing Vite config/CSS-empty/chunk-size warnings remain).
 - `JWT_SECRET=<synthetic test-only value> npm --prefix backend test`: 9 passed.
