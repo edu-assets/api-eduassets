@@ -18,6 +18,7 @@ No sandbox, exclusivamente com dados e credenciais sintéticos:
 - Backend: 24 testes unitários, build TypeScript e `prisma validate` aprovados; a suíte de integração passou em 9/9 casos.
 - PostgreSQL 16 local descartável: as 6 migrations aplicaram do zero; seed executado duas vezes. Uma segunda execução com outra senha não substituiu a senha cadastrada, confirmada pelo teste de login. Cobertos Guest DTOs/negação, logout e troca de senha revogáveis, estoque e concorrência de empréstimos/ocorrências.
 - `tsc --noEmit -p tsconfig.integration.json`, parse Python/JSON/YAML, `sh -n` dos scripts e `git diff --check` passaram. O PDF atualizado contém 17 páginas e foi inspecionado visualmente.
+- A primeira execução hospedada do GitHub Actions falhou antes dos testes por falta de Prisma Client gerado antes do seed. O workflow agora executa explicitamente `prisma:generate` antes de migration/seed; a execução hospedada após essa correção ainda está pendente.
 
 Os builds aprovados mantêm avisos não bloqueantes já observados: loader/configuração Vite, CSS vazio em `footer.css` e chunk ExcelJS acima de 500 kB. Não foram feitas otimizações fora do escopo de segurança e release.
 
@@ -25,13 +26,13 @@ A documentação oficial do PostgreSQL descreve que `verify-full` valida a cadei
 
 ## Pendências e checklist do operador
 
-- [ ] Executar GitHub Actions hospedado e build/testes Docker/Compose. A sintaxe YAML local passou; imagens/serviços não foram iniciados.
+- [ ] Confirmar GitHub Actions hospedado verde após a correção da ordem do Prisma. O build/teste Docker/Compose hospedado não chegou a rodar na execução que falhou; a sintaxe YAML local passou.
 - [ ] Validar Nginx com `nginx -t`, DNS, firewall, origem e ranges Cloudflare atuais, CORS/CSP e headers no host real.
 - [ ] Em PostgreSQL gerenciado, confirmar hostname/CA do provedor e conexão TLS verificada; fazer backup antes da migration, aplicar primeiro em staging e comprovar restauração em banco vazio.
 - [ ] Planejar novo login dos usuários na release da migration `sessionVersion`, que invalida tokens emitidos sem o novo claim. Se a chamada de logout estiver offline/falhar, token copiado pode continuar válido até expirar.
 - [ ] Aprovar grants/RLS e retenção de dados no provedor, monitoramento/RPO/RTO, QA manual de navegador/acessibilidade e hardware RFID. Manter RFID público desativado até teste de rede e hardware.
 
-Nenhum banco remoto, dado real, segredo, DNS, host, firewall ou serviço de produção foi acessado/alterado; não houve deployment. Docker/Compose, Nginx, CI hospedado, backup/restore externo, Vercel, TLS gerenciado, browser em produção e hardware permanecem não verificados. A atividade de inatividade Admin ainda usa estado em memória e requer uma instância até que seja compartilhada.
+Nenhum banco remoto, dado real, segredo, DNS, host, firewall ou serviço de produção foi acessado/alterado; não houve deployment. Docker/Compose, Nginx, resultado final do CI hospedado, backup/restore externo, Vercel, TLS gerenciado, browser em produção e hardware permanecem não verificados. A atividade de inatividade Admin ainda usa estado em memória e requer uma instância até que seja compartilhada.
 
 ## Arquivos-chave
 

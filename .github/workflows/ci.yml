@@ -48,6 +48,8 @@ jobs:
       - run: npm ci --prefix frontend
       - name: Validate Prisma schema without DIRECT_URL
         run: cd backend && unset DIRECT_URL && npx prisma validate --config prisma.config.ts
+      - name: Generate Prisma Client
+        run: npm --prefix backend run prisma:generate
       - run: npm --prefix backend run migrate:deploy
       - run: npm --prefix backend run db:seed
       - name: Verify seed idempotency
