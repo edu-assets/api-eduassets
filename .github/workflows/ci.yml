@@ -79,7 +79,111 @@ jobs:
       - name: Validate deployment templates
         shell: bash
         run: |
-          node -e "JSON.parse(require('fs').readFileSync('frontend/vercel.json', 'utf8'))"
-          cp .env.production.example .env.production
+          node <<'NODE'
+          const fs = require('fs');
+          const vercel = JSON.parse(fs.readFileSync('frontend/vercel.json', 'utf8'));
+          const csp = vercel.headers.flatMap((entry) => entry.headers).find((entry) => entry.key === 'Content-Security-Policy')?.value ?? '';
+          if (!csp.includes("connect-src 'self' https://api.eduassets.tech")) throw new Error('CSP does not allow the documented API origin');
+          if (csp.includes("connect-src 'self';")) throw new Error('CSP still restricts connect-src to self only');
+          NODE
+          grep -Fq 'location = /auth/rfid' deploy/nginx/eduassets-api.conf.example
+          grep -Fq 'location = /ws/rfid' deploy/nginx/eduassets-api.conf.example
+          cat > .env.production <<'EOF'
+          DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/eduassets
+          JWT_SECRET=synthetic-compose-validation-secret-0123456789abcdef
+          CORS_ORIGIN=https://app.example.invalid
+          TRUST_PROXY=0
+          RFID_BRIDGE_ENABLED=false
+          EOF
           trap 'rm -f .env.production' EXIT
           docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
+
+  production-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: eduassets_test
+          POSTGRES_USER: eduassets_test
+          POSTGRES_PASSWORD: eduassets_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eduassets_test -d eduassets_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://eduassets_test:eduassets_test@127.0.0.1:5432/eduassets_test?schema=public
+      JWT_SECRET: synthetic-production-smoke-secret-0123456789abcdef
+      CORS_ORIGIN: https://app.example.invalid
+      TRUST_PROXY: "0"
+      RFID_BRIDGE_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production images
+        run: |
+          docker build --target runtime -t eduassets-backend:ci -f backend/Dockerfile backend
+          docker build --target migration -t eduassets-backend-migration:ci -f backend/Dockerfile backend
+      - name: Wait for disposable PostgreSQL
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if pg_isready -h 127.0.0.1 -p 5432 -U eduassets_test -d eduassets_test; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Apply migrations with the production migration image
+        run: |
+          docker run --rm --network host \
+            -e NODE_ENV=production \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e JWT_SECRET="$JWT_SECRET" \
+            -e CORS_ORIGIN="$CORS_ORIGIN" \
+            -e TRUST_PROXY="$TRUST_PROXY" \
+            -e RFID_BRIDGE_ENABLED="$RFID_BRIDGE_ENABLED" \
+            eduassets-backend-migration:ci npm run migrate:deploy
+      - name: Start and poll the production container
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          container=eduassets-production-smoke
+          cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+
+          docker run -d --name "$container" --network host --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --cap-drop ALL --security-opt no-new-privileges --init \
+            -e NODE_ENV=production \
+            -e HOST=0.0.0.0 \
+            -e PORT=3000 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e JWT_SECRET="$JWT_SECRET" \
+            -e CORS_ORIGIN="$CORS_ORIGIN" \
+            -e TRUST_PROXY="$TRUST_PROXY" \
+            -e RFID_BRIDGE_ENABLED="$RFID_BRIDGE_ENABLED" \
+            eduassets-backend:ci >/dev/null
+
+          for attempt in {1..60}; do
+            if ! docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null | grep -qx true; then
+              echo 'Production container exited before readiness.'
+              docker logs --tail=200 "$container" || true
+              exit 1
+            fi
+            if curl --fail --silent http://127.0.0.1:3000/ready >/dev/null; then
+              docker stop --time 15 "$container" >/dev/null
+              exit_code=$(docker inspect -f '{{.State.ExitCode}}' "$container")
+              if [ "$exit_code" != 0 ]; then
+                echo "Production container exited with code $exit_code after SIGTERM."
+                docker logs --tail=200 "$container" || true
+                exit 1
+              fi
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo 'Production container did not become ready.'
+          docker logs --tail=200 "$container" || true
+          exit 1

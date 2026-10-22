@@ -31,3 +31,16 @@ test('production config requires explicit security and DB configuration', () => 
   assert.equal(config.host, '0.0.0.0');
   assert.equal(config.port, 3000);
 });
+
+test('empty optional DIRECT_URL behaves like an omitted value without weakening DATABASE_URL validation', () => {
+  const base = {
+    NODE_ENV: 'production',
+    JWT_SECRET: 'a'.repeat(32),
+    DATABASE_URL: 'postgresql://synthetic:pass@127.0.0.1/test',
+    CORS_ORIGIN: 'https://example.test',
+    TRUST_PROXY: '0',
+  } as const;
+
+  assert.doesNotThrow(() => getRuntimeConfig({ ...base, DIRECT_URL: '' }));
+  assert.throws(() => getRuntimeConfig({ ...base, DATABASE_URL: '' }), /DATABASE_URL é obrigatório/);
+});

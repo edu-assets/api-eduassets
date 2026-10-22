@@ -46,7 +46,7 @@ export function getRuntimeConfig(env: NodeJS.ProcessEnv = process.env) {
   if (nodeEnv !== 'test') {
     if (!env.DATABASE_URL) throw new Error('DATABASE_URL é obrigatório para iniciar o backend.');
     for (const [name, value] of [['DATABASE_URL', env.DATABASE_URL], ['DIRECT_URL', env.DIRECT_URL]] as const) {
-      if (value === undefined) continue;
+      if (!value) continue;
       let parsed: URL;
       try { parsed = new URL(value); } catch { throw new Error(`${name} deve ser uma URL PostgreSQL válida.`); }
       if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname || parsed.pathname.length < 2) {

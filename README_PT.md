@@ -6,7 +6,7 @@
 
 [README raiz em inglês](README.md) · [Documentação em inglês](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [Guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação em português](frontend/public/docs/GUIA_IMPLANTACAO.md)
 
-> **Status: Beta.** O checkout contém um frontend Vite/TypeScript e um backend Node/Express/TypeScript funcionais, autenticação, modo convidado, operações de empréstimo/devolução, controle de ocorrências, exportações e uma integração RFID opcional. Não há um deployment público operacional documentado neste repositório; os passos abaixo descrevem desenvolvimento local e preparação técnica, não uma infraestrutura já publicada. RFID está desligado na implantação pública. Migrations, seed, Docker e testes de integração com o banco não foram executados neste sandbox; os arquivos de implantação são templates e nenhum deployment foi realizado.
+> **Status: Beta.** O checkout contém um frontend Vite/TypeScript e um backend Node/Express/TypeScript funcionais, autenticação, modo convidado, operações de empréstimo/devolução, controle de ocorrências, exportações e uma integração RFID opcional. Nesta execução, backend (25/25 testes), frontend (35/35 testes), typecheck, builds e `prisma validate` passaram; migrations, seed, PostgreSQL de integração, Docker/Compose, Nginx e CI hospedado não foram executados neste sandbox. Não há um deployment público operacional documentado neste repositório; os arquivos de implantação são templates e nenhum deployment foi realizado. RFID está desligado na implantação pública.
 
 ## Visão geral
 
@@ -33,7 +33,7 @@ Navegador ── http://localhost:5173 ── servidor de desenvolvimento Vite
                                           ▼
                                      API :3000 ── PostgreSQL
 
-Bridge RFID opcional ── backend /auth/rfid (somente loopback)
+Bridge RFID opcional (quiosque local) ── backend /auth/rfid (não exposto pelo proxy público)
                      └─ provisionador local http://127.0.0.1:3001/provision
 ```
 
@@ -82,7 +82,7 @@ O roteador da aplicação inclui:
 
 - `GET /health` para liveness, `GET /ready` para readiness limitada do PostgreSQL e `GET /` para uma resposta básica de status;
 - `POST /auth/login`, `GET /auth/me`, `POST /auth/logout` e `PATCH /auth/senha`;
-- `POST /auth/rfid` para o fluxo RFID opcional restrito a loopback;
+- `POST /auth/rfid` para o fluxo RFID opcional do quiosque local; o template Nginx público retorna 404 para esse endpoint e para `/ws/rfid`;
 - rotas CRUD para `/categorias`, `/equipamentos`, `/responsaveis`, `/usuarios`, `/emprestimos` e `/ocorrencias`; e
 - provisionamento/revogação de tokens RFID, somente para administradores, em `/usuarios/:id/rfid-token`.
 
@@ -247,7 +247,7 @@ RFID é intencionalmente desabilitado por padrão. Habilitá-lo exige todos os i
 1. definir `RFID_BRIDGE_ENABLED=true` no backend e, ao usar o listener do navegador, `VITE_RFID_BRIDGE_ENABLED=true`;
 2. configurar o mesmo `RFID_BRIDGE_SECRET` forte no backend e na bridge;
 3. instalar e validar o hardware real do leitor e suas dependências Python;
-4. garantir que o backend receba as requisições da bridge como loopback. Tanto `POST /auth/rfid` quanto a atualização para `/ws/rfid` rejeitam pares não loopback; um Raspberry Pi na mesma LAN não é automaticamente suficiente;
+4. usar uma instância de quiosque/local sem proxy público para a bridge. Tanto `POST /auth/rfid` quanto a atualização para `/ws/rfid` rejeitam pares não loopback; atrás de Nginx, o loopback observado pelo backend é o proxy e não prova que o chamador original é local. O template público bloqueia ambos com 404;
 5. manter o auxiliar de provisionamento em `127.0.0.1:3001`, proteger seu arquivo de ambiente e restringir a exposição por qualquer proxy reverso/firewall; e
 6. validar o comportamento de leitura/gravação do cartão e a política de rede na máquina de destino antes de depender deles.
 

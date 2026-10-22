@@ -12,16 +12,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dasilva-thiago/edu-assets.git"
+    "url": "git+https://github.com/edu-assets/eduAssets.git"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/dasilva-thiago/edu-assets/issues"
+    "url": "https://github.com/edu-assets/eduAssets/issues"
   },
-  "homepage": "https://github.com/dasilva-thiago/edu-assets#readme",
+  "homepage": "https://github.com/edu-assets/eduAssets#readme",
   "devDependencies": {
     "concurrently": "^10.0.5"
   },

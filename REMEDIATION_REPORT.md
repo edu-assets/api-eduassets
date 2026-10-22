@@ -9,32 +9,36 @@
 - Implementada e testada sincronização de stores em mudanças de autenticação: Guest carrega apenas os dados públicos, Editor/Administrador atualizam stores autorizadas sem reload, e logout limpa dados privados. RFID permanece no caminho existente e gated por flag.
 - Adicionadas constraints SQL e índices em migration Prisma compatível com a versão 6. Seed exige contas explícitas, não sobrescreve contas/senhas existentes e rejeita admin/editor com email duplicado.
 - Atualizada documentação PT/EN sobre TLS PostgreSQL (`sslmode=verify-full` com CA confiável e hostname correspondente), operação de proxy/Cloudflare, limites de backup, efeito de reautenticação após migration e o PDF bilíngue do manual.
+- Corrigido o contrato opcional de `DIRECT_URL`: Compose não o injeta vazio, a validação trata string vazia como ausente, o Prisma usa `DATABASE_URL` como fallback e há regressão explícita.
+- Atualizada a CSP para permitir somente `https://api.eduassets.tech` além de `'self'`; esse é o hostname documentado/intencional, não uma verificação de DNS ou headers Vercel.
+- O Docker agora instala `openssl` no stage compartilhado (herdado por migração/runtime) e executa `node dist/src/server.js` diretamente; o CI ganhou um job de smoke em produção com PostgreSQL descartável, migrações, `/ready`, filesystem somente leitura e encerramento limpo.
+- O template Nginx retorna 404 para `/auth/rfid` e `/ws/rfid` na instância pública; o loopback do backend permanece apenas para o quiosque local e não é tratado como autenticação atrás de proxy.
 
 ## Validação executada
 
 No sandbox, exclusivamente com dados e credenciais sintéticos:
 
-- Frontend: 35 testes em 9 arquivos, `npm run typecheck` e `npm run build` aprovados.
-- Backend: 24 testes unitários, build TypeScript e `prisma validate` aprovados; a suíte de integração passou em 9/9 casos.
-- PostgreSQL 16 local descartável: as 6 migrations aplicaram do zero; seed executado duas vezes. Uma segunda execução com outra senha não substituiu a senha cadastrada, confirmada pelo teste de login. Cobertos Guest DTOs/negação, logout e troca de senha revogáveis, estoque e concorrência de empréstimos/ocorrências.
-- `tsc --noEmit -p tsconfig.integration.json`, parse Python/JSON/YAML, `sh -n` dos scripts e `git diff --check` passaram. O PDF atualizado contém 17 páginas e foi inspecionado visualmente.
-- A primeira execução hospedada falhou porque o Prisma Client ainda não tinha sido gerado antes do seed. O workflow foi corrigido e a execução CI do commit de código `9842516` passou: migration/seed, testes, builds frontend/backend, startup/readiness, targets Docker runtime/migration e validação Compose. [Execução CI do código](https://github.com/edu-assets/eduAssets/actions/runs/39805708848).
+- Backend: `JWT_SECRET=<synthetic> NODE_ENV=test npm test` passou em 25/25 testes; uma execução sem `JWT_SECRET` falhou antes no teste de serviços por configuração ausente e foi repetida corretamente. Build TypeScript e `prisma generate` passaram.
+- `prisma validate` passou com `DIRECT_URL` omitido e com `DIRECT_URL=''`, usando `DATABASE_URL` sintética como fallback.
+- Frontend: 35 testes em 9 arquivos, `npm run typecheck` e `VITE_API_BASE_URL=https://api.eduassets.tech npm run build` passaram.
+- Asserções estáticas da CSP e dos blocos Nginx RFID passaram; `git diff --check` passou.
+- O remote Git canônico (`edu-assets/eduAssets`) foi confirmado no HEAD `408cb82641b8546689647c0f4fd5e355a35a9feb`; `package.json` foi alinhado ao mesmo repositório, corrigindo o metadata antigo `dasilva-thiago/edu-assets`.
+- Docker, PostgreSQL local, `pg_isready`, Nginx e Compose não estão disponíveis neste sandbox. Portanto, migrations, seed, testes de integração, build/execução da imagem, `/ready` contra PostgreSQL, shutdown do container e `nginx -t` não foram executados.
+- O run hospedado `39806752284` passou para o repositório `edu-assets/eduAssets` no HEAD base `408cb82641b8546689647c0f4fd5e355a35a9feb`, mas executou somente o job `verify` anterior às alterações locais não commitadas. O novo job de smoke em `NODE_ENV=production` ainda não foi executado; o hostname `api.eduassets.tech` também não teve DNS, TLS, Vercel ou headers reais verificados.
 
-Os builds aprovados mantêm avisos não bloqueantes já observados: loader/configuração Vite, CSS vazio em `footer.css` e chunk ExcelJS acima de 500 kB. Não foram feitas otimizações fora do escopo de segurança e release.
-
-O runner também emitiu avisos de migração de Actions Node 20 e do label `ubuntu-latest`; o job passou usando os runtimes disponibilizados. Revisar versões de Actions e imagem do runner antes de uma atualização planejada do CI.
+O build do frontend emitiu avisos não bloqueantes sobre loader/configuração Vite, CSS vazio em `footer.css` e chunk ExcelJS acima de 500 kB. Não foram feitas otimizações fora do escopo.
 
 A documentação oficial do PostgreSQL descreve que `verify-full` valida a cadeia de confiança e o hostname, e recomenda esse modo em ambientes sensíveis [1].
 
 ## Pendências e checklist do operador
 
-- [x] Confirmar GitHub Actions hospedado verde após a correção do Prisma, incluindo builds Docker e parse da configuração Compose.
-- [ ] Executar o stack Compose e validar Nginx (`nginx -t`), DNS, firewall, origem, ranges Cloudflare atuais, CORS/CSP e headers no host-alvo. CI construiu as imagens e validou a configuração Compose, mas não subiu o stack de produção.
+- [ ] Confirmar GitHub Actions hospedado no repositório/HEAD corretos após a correção, incluindo o novo smoke de produção.
+- [ ] Executar o stack Compose e validar Nginx (`nginx -t`), DNS, firewall, origem, ranges Cloudflare atuais, CORS/CSP e headers no host-alvo. A configuração e os bloqueios foram revisados estaticamente, mas o stack não subiu.
 - [ ] Em PostgreSQL gerenciado, confirmar hostname/CA do provedor e conexão TLS verificada; fazer backup antes da migration, aplicar primeiro em staging e comprovar restauração em banco vazio.
 - [ ] Planejar novo login dos usuários na release da migration `sessionVersion`, que invalida tokens emitidos sem o novo claim. Se a chamada de logout estiver offline/falhar, token copiado pode continuar válido até expirar.
 - [ ] Aprovar grants/RLS e retenção de dados no provedor, monitoramento/RPO/RTO, QA manual de navegador/acessibilidade e hardware RFID. Manter RFID público desativado até teste de rede e hardware.
 
-Nenhum banco remoto, dado real, segredo, DNS, host, firewall ou serviço de produção foi acessado/alterado; não houve deployment. Execução do stack Compose, Nginx, backup/restore externo, Vercel, TLS gerenciado, browser em produção e hardware permanecem não verificados. A atividade de inatividade Admin ainda usa estado em memória e requer uma instância até que seja compartilhada.
+Nenhum banco local/remoto, dado real, segredo, DNS, host, firewall ou serviço de produção foi acessado/alterado; não houve deployment. Execução do stack Compose, container contra PostgreSQL, Nginx, backup/restore externo, Vercel, TLS gerenciado, browser em produção e hardware permanecem não verificados. A atividade de inatividade Admin ainda usa estado em memória e requer uma instância até que seja compartilhada.
 
 ## Arquivos-chave
 

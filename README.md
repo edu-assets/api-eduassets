@@ -33,7 +33,7 @@ Browser ── http://localhost:5173 ── Vite dev server
                                       ▼
                                  API :3000 ── PostgreSQL
 
-Optional RFID bridge ── backend /auth/rfid (loopback-only)
+Optional RFID bridge (local kiosk) ── backend /auth/rfid (not exposed by the public proxy)
                      └─ local provisioner http://127.0.0.1:3001/provision
 ```
 
@@ -82,7 +82,7 @@ The application router includes:
 
 - `GET /health` for liveness, `GET /ready` for bounded PostgreSQL readiness, and `GET /` for a basic status response;
 - `POST /auth/login`, `GET /auth/me`, `POST /auth/logout` and `PATCH /auth/senha`;
-- `POST /auth/rfid` for the optional loopback RFID flow;
+- `POST /auth/rfid` for the optional local-kiosk RFID flow; the public Nginx template returns 404 for this endpoint and `/ws/rfid`;
 - CRUD routes for `/categorias`, `/equipamentos`, `/responsaveis`, `/usuarios`, `/emprestimos` and `/ocorrencias`; and
 - administrator-only RFID-token provisioning/revocation under `/usuarios/:id/rfid-token`.
 
@@ -247,7 +247,7 @@ RFID is intentionally disabled by default. Enabling it requires all of the follo
 1. set `RFID_BRIDGE_ENABLED=true` on the backend and, when using the browser listener, `VITE_RFID_BRIDGE_ENABLED=true`;
 2. configure the same strong `RFID_BRIDGE_SECRET` on backend and bridge;
 3. install and validate the actual reader hardware and its Python dependencies;
-4. ensure the backend sees bridge requests as loopback. Both `POST /auth/rfid` and the `/ws/rfid` upgrade reject non-loopback peers; a Raspberry Pi on the same LAN is not automatically sufficient;
+4. use a separate local-kiosk instance without a public proxy for the bridge. Both `POST /auth/rfid` and the `/ws/rfid` upgrade reject non-loopback peers; behind Nginx, the backend sees the proxy loopback and that is not proof the original caller is local. The public template blocks both routes with 404;
 5. keep the provisioning helper on `127.0.0.1:3001`, protect its environment file and restrict any reverse proxy/firewall exposure; and
 6. validate card read/write behavior and the network policy on the target machine before relying on it.
 

@@ -17,6 +17,15 @@ server {
     real_ip_header CF-Connecting-IP;
     real_ip_recursive on;
 
+    # RFID bridge/auth is reserved for the isolated local kiosk, never the public API.
+    location = /auth/rfid {
+        return 404;
+    }
+
+    location = /ws/rfid {
+        return 404;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
