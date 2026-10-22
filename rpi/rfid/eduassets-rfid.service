@@ -1,16 +1,17 @@
 [Unit]
-Description=eduAssets RFID Admin Login Bridge
+Description=eduAssets RFID Bridge
 After=network.target
 
 [Service]
 Type=simple
+User=eduassets
+Group=eduassets
 WorkingDirectory=/opt/eduassets-rfid
 EnvironmentFile=/etc/eduassets/rfid_bridge.env
-ExecStart=/home/dasilva-thiago/Projetos/eduAssets/rpi/venv/bin/python3 /opt/eduassets-rfid/rfid_admin_bridge.py
+ExecStartPre=/bin/sh -c '[ "$(stat -c %a /etc/eduassets/rfid_bridge.env)" = 600 ]'
+ExecStart=/opt/eduassets-rfid/venv/bin/python3 /opt/eduassets-rfid/rfid_admin_bridge.py
 Restart=on-failure
 RestartSec=3
-User=pi
-ExecStartPre=/bin/sh -c '[ "$(stat -c %a /etc/eduassets/rfid_bridge.env)" = 600 ]'
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

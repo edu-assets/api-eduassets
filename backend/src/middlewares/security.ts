@@ -2,7 +2,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 
 export const securityHeaders = helmet({
-  frameguard: false, // Permite renderização dentro do iframe do Google AI Studio
+  frameguard: { action: 'deny' },
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 });

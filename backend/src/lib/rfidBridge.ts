@@ -22,7 +22,10 @@ export function initRfidBridge(server: Server): void {
   wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (req, socket, head) => {
-    if (req.url !== '/ws/rfid') return;
+    if (req.url !== '/ws/rfid') {
+      socket.destroy();
+      return;
+    }
 
     // Accepts only connections from localhost (loopback) for security reasons
     if (!ehLoopback(req.socket.remoteAddress)) {

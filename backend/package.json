@@ -29,6 +29,11 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "test": "tsx --test tests/**/*.test.ts",
-    "start": "node dist/src/server.js"
-  }
+    "start": "node dist/src/server.js",
+    "migrate:deploy": "prisma migrate deploy"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "license": "MIT"
 }

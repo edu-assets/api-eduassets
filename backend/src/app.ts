@@ -11,7 +11,7 @@ export const app = express();
 const isProduction = process.env.NODE_ENV === 'production';
 const HOST = process.env.HOST ?? '127.0.0.1';
 const isLoopbackHost = HOST === 'localhost' || HOST === '127.0.0.1' || HOST === '::1';
-const isLocalDevelopment = !isProduction && !process.env.NODE_ENV && isLoopbackHost;
+const isLocalDevelopment = process.env.NODE_ENV === 'development' && isLoopbackHost;
 
 /**
  * Trust proxy:

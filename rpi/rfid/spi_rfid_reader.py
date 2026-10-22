@@ -52,6 +52,8 @@ class SpiRfidReader(RfidReaderBase):
 
         uid = self._aguardar_cartao(timeout_s)
 
+        if not uid:
+            return False
         if self._reader.MFRC522_SelectTag(uid) != self._reader.MI_OK:
             return False
 

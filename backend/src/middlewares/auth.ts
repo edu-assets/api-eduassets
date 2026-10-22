@@ -61,8 +61,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   next();
 }
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  requireAuth(req, res, () => {
+export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  await requireAuth(req, res, () => {
     if (req.user?.nivelAcesso !== 'ADMINISTRADOR') {
       res.status(403).json({ erro: 'backend.auth.acesso_restrito_admin' });
       return;

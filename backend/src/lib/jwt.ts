@@ -1,19 +1,12 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET_RAW =
-  process.env.JWT_SECRET ||
-  (process.env.NODE_ENV !== 'production'
-    ? 'dev_jwt_secret_must_be_at_least_32_characters_long_for_eduassets_local'
-    : undefined);
-
+const JWT_SECRET_RAW = process.env.JWT_SECRET;
 if (!JWT_SECRET_RAW || JWT_SECRET_RAW.length < 32) {
   throw new Error(
     'JWT_SECRET ausente ou fraco. Defina uma variável de ambiente JWT_SECRET com pelo menos 32 caracteres aleatórios antes de iniciar o servidor.'
   );
 }
-
 const JWT_SECRET: string = JWT_SECRET_RAW;
-
 const JWT_EXPIRES_IN = '8h';
 
 export interface AppJwtPayload {
