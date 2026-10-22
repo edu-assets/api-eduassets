@@ -8,28 +8,28 @@
 - Fechado o gap de logout: migration `20261022110000_user_session_version` adiciona `Usuario.sessionVersion`. Cada request protegido compara o claim com o banco. `POST /auth/logout` incrementa a versão e revoga JWTs anteriores da conta; troca de senha também revoga as demais sessões e devolve token renovado ao navegador atual. O frontend limpa o token de imediato e solicita revogação best-effort.
 - Implementada e testada sincronização de stores em mudanças de autenticação: Guest carrega apenas os dados públicos, Editor/Administrador atualizam stores autorizadas sem reload, e logout limpa dados privados. RFID permanece no caminho existente e gated por flag.
 - Adicionadas constraints SQL e índices em migration Prisma compatível com a versão 6. Seed exige contas explícitas, não sobrescreve contas/senhas existentes e rejeita admin/editor com email duplicado.
-- Atualizada documentação PT/EN sobre TLS PostgreSQL (`sslmode=verify-full` com CA confiável e hostname correspondente), operação de proxy/Cloudflare, limites de backup, efeito de reautenticação após migration e o PDF bilíngue do manual.
+- Atualizada documentação PT/EN sobre TLS PostgreSQL, separando parâmetros libpq de parâmetros Prisma, operação de proxy/Cloudflare, limites de backup, efeito de reautenticação após migration e o PDF bilíngue do manual.
 - Corrigido o contrato opcional de `DIRECT_URL`: Compose não o injeta vazio, a validação trata string vazia como ausente, o Prisma usa `DATABASE_URL` como fallback e há regressão explícita.
 - Atualizada a CSP para permitir somente `https://api.eduassets.tech` além de `'self'`; esse é o hostname documentado/intencional, não uma verificação de DNS ou headers Vercel.
 - O Docker agora instala `openssl` no stage compartilhado (herdado por migração/runtime) e executa `node dist/src/server.js` diretamente; o CI ganhou um job de smoke em produção com PostgreSQL descartável, migrações, `/ready`, filesystem somente leitura e encerramento limpo.
 - O template Nginx retorna 404 para `/auth/rfid` e `/ws/rfid` na instância pública; o loopback do backend permanece apenas para o quiosque local e não é tratado como autenticação atrás de proxy.
-- O desenvolvimento local agora gera o Prisma Client e aplica migrations no `predev`; erros Prisma de conexão/schema retornam 503 traduzível, o frontend verifica `/ready` antes das cargas da sessão e `npm run dev` encerra o frontend se o backend falhar.
+- O desenvolvimento local gera o Prisma Client no install/build e aplica migrations somente por comando explícito `npm run dev:db`; erros Prisma de conexão/schema retornam 503 traduzível, o frontend verifica `/ready` antes das cargas da sessão e `npm run dev` encerra o frontend se o backend falhar.
 
 ## Validação executada
 
 No sandbox, exclusivamente com dados e credenciais sintéticos:
 
-- Backend: `JWT_SECRET=<synthetic> NODE_ENV=test npm test` passou em 28/28 testes, incluindo a classificação de falhas Prisma. Build TypeScript e `prisma generate` passaram.
+- Backend: `JWT_SECRET=<synthetic> NODE_ENV=test npm test` passou em 29/29 testes, incluindo a classificação de falhas Prisma. Build TypeScript e `prisma generate` passaram.
 - `prisma validate` passou com `DIRECT_URL` omitido e com `DIRECT_URL=''`, usando `DATABASE_URL` sintética como fallback.
 - Frontend: 36 testes em 9 arquivos, `npm run typecheck` e `VITE_API_BASE_URL=https://api.eduassets.tech npm run build` passaram.
 - Asserções estáticas da CSP e dos blocos Nginx RFID passaram; `git diff --check` passou.
 - O remote Git canônico (`edu-assets/eduAssets`) foi confirmado no HEAD `408cb82641b8546689647c0f4fd5e355a35a9feb`; `package.json` foi alinhado ao mesmo repositório, corrigindo o metadata antigo `dasilva-thiago/edu-assets`.
 - Docker, PostgreSQL local, `pg_isready`, Nginx e Compose não estão disponíveis neste sandbox. Portanto, migrations, seed, testes de integração, build/execução da imagem, `/ready` contra PostgreSQL, shutdown do container e `nginx -t` não foram executados.
-- O run hospedado `39806752284` passou para o repositório `edu-assets/eduAssets` no HEAD base `408cb82641b8546689647c0f4fd5e355a35a9feb`, mas executou somente o job `verify` anterior às alterações locais não commitadas. O novo job de smoke em `NODE_ENV=production` ainda não foi executado; o hostname `api.eduassets.tech` também não teve DNS, TLS, Vercel ou headers reais verificados.
+- O run hospedado `39806752284` passou para o repositório `edu-assets/eduAssets` em um HEAD anterior; ele não valida este conjunto de alterações. O novo job de smoke em `NODE_ENV=production` ainda não foi executado; o hostname `api.eduassets.tech` também não teve DNS, TLS, Vercel ou headers reais verificados.
 
 O build do frontend emitiu avisos não bloqueantes sobre loader/configuração Vite, CSS vazio em `footer.css` e chunk ExcelJS acima de 500 kB. Não foram feitas otimizações fora do escopo.
 
-A documentação oficial do PostgreSQL descreve que `verify-full` valida a cadeia de confiança e o hostname, e recomenda esse modo em ambientes sensíveis [1].
+A documentação oficial do PostgreSQL descreve o comportamento de verificação TLS do libpq; os parâmetros efetivos devem ser confirmados separadamente para libpq e Prisma [1].
 
 ## Pendências e checklist do operador
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
-  login: z.string().trim().min(1, 'Login é obrigatório.').max(200),
+  login: z.string().trim().toLowerCase().min(1, 'Login é obrigatório.').max(200),
   password: z.string().min(1, 'Senha é obrigatória.').max(200),
 });
 

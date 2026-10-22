@@ -19,7 +19,10 @@ function ehLoopback(remoteAddress: string | undefined): boolean {
 }
 
 export async function login(loginStr: string, password: string) {
-  const usuario = await prisma.usuario.findUnique({ where: { login: loginStr } });
+  const loginNormalizado = loginStr.trim().toLowerCase();
+  const usuario = await prisma.usuario.findFirst({
+    where: { login: { equals: loginNormalizado, mode: 'insensitive' } },
+  });
   if (!usuario) {
     await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     throw new AppError(401, 'backend.auth.credenciais_invalidas');

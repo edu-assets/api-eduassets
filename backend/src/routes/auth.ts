@@ -22,4 +22,6 @@ authRouter.patch(
   validate(alterarSenhaSchema),
   authController.alterarSenha
 );
-authRouter.post('/rfid', rfidLoginRateLimiter, validate(rfidScanSchema), authController.loginRfid);
+if (process.env.RFID_BRIDGE_ENABLED === 'true') {
+  authRouter.post('/rfid', rfidLoginRateLimiter, validate(rfidScanSchema), authController.loginRfid);
+}

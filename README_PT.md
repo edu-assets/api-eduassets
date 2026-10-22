@@ -6,7 +6,7 @@
 
 [README raiz em inglês](README.md) · [Documentação em inglês](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [Guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação em português](frontend/public/docs/GUIA_IMPLANTACAO.md)
 
-> **Status: Beta.** O checkout contém um frontend Vite/TypeScript e um backend Node/Express/TypeScript funcionais, autenticação, modo convidado, operações de empréstimo/devolução, controle de ocorrências, exportações e uma integração RFID opcional. Nesta execução, backend (28/28 testes), frontend (36/36 testes), typecheck, builds e `prisma validate` passaram; migrations, seed, PostgreSQL de integração, Docker/Compose, Nginx e CI hospedado não foram executados neste sandbox. Não há um deployment público operacional documentado neste repositório; os arquivos de implantação são templates e nenhum deployment foi realizado. RFID está desligado na implantação pública.
+> **Status: Beta.** O checkout contém um frontend Vite/TypeScript e um backend Node/Express/TypeScript funcionais, autenticação, modo convidado, operações de empréstimo/devolução, controle de ocorrências, exportações e uma integração RFID opcional. Nesta execução, backend (29/29 testes), frontend (36/36 testes), typecheck, builds e `prisma validate` passaram; migrations, seed, PostgreSQL de integração, Docker/Compose, Nginx e CI hospedado não foram executados neste sandbox. Não há um deployment público operacional documentado neste repositório; os arquivos de implantação são templates e nenhum deployment foi realizado. RFID está desligado na implantação pública.
 
 ## Visão geral
 

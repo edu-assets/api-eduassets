@@ -22,7 +22,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://eduassets_test:eduassets_test@127.0.0.1:5432/eduassets_test?schema=public
+      DATABASE_URL: postgresql://eduassets_test:eduassets_test@127.0.0.1:5432/eduassets_test
       JWT_SECRET: synthetic-ci-only-secret-0123456789abcdef
       NODE_ENV: test
       HOST: 127.0.0.1
@@ -86,8 +86,8 @@ jobs:
           if (!csp.includes("connect-src 'self' https://api.eduassets.tech")) throw new Error('CSP does not allow the documented API origin');
           if (csp.includes("connect-src 'self';")) throw new Error('CSP still restricts connect-src to self only');
           NODE
-          grep -Fq 'location = /auth/rfid' deploy/nginx/eduassets-api.conf.example
-          grep -Fq 'location = /ws/rfid' deploy/nginx/eduassets-api.conf.example
+          grep -Fq 'location ~* ^/auth/rfid' deploy/nginx/eduassets-api.conf.example
+          grep -Fq 'location ~* ^/ws/rfid' deploy/nginx/eduassets-api.conf.example
           cat > .env.production <<'EOF'
           DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/eduassets
           JWT_SECRET=synthetic-compose-validation-secret-0123456789abcdef
@@ -115,7 +115,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://eduassets_test:eduassets_test@127.0.0.1:5432/eduassets_test?schema=public
+      DATABASE_URL: postgresql://eduassets_test:eduassets_test@127.0.0.1:5432/eduassets_test
       JWT_SECRET: synthetic-production-smoke-secret-0123456789abcdef
       CORS_ORIGIN: https://app.example.invalid
       TRUST_PROXY: "0"

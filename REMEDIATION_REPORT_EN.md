@@ -20,7 +20,7 @@
 | B8 — port/host contracts | `PORT` takes precedence over `BACKEND_PORT`; each supplied value is validated; default 3000; explicit bind/trust proxy for production. Bridge remains on 3001/loopback. | **Fixed in code/docs/unit tests.** Backend and hardware were not started simultaneously. |
 | B9 — Prisma generation/build/runtime | Build generates Prisma Client before TypeScript; the shared Docker stage explicitly installs `openssl` for build/migration/runtime; runtime invokes `node dist/src/server.js` directly; Node `>=22.12.0` aligned with CI/Docker. | **Clean install, generation, and local build passed.** Image build and runtime not run (Docker unavailable); actual OpenSSL/Prisma runtime compatibility remains unverified. |
 | B10 — inconsistent `DIRECT_URL` | Production Compose no longer injects an empty `DIRECT_URL`; runtime validation treats an empty optional value as absent; `prisma.config.ts` uses `DATABASE_URL` fallback; migration script explicitly uses config. | **Unit regression, schema validation with omitted/empty values, generation and build passed.** `migrate deploy`/seed not run without disposable PostgreSQL. |
-| B15 — local startup hid database failures | Backend `predev` now generates Prisma Client and applies committed migrations; Prisma connection/schema failures return translated 503 responses; frontend checks `/ready` before session loads; root `npm run dev` stops both processes when one fails. | **Fixed in code/tests.** PostgreSQL-backed startup remains environment-dependent. |
+| B15 — local startup hid database failures | Backend generates Prisma Client during install/build and applies migrations only through explicit `npm run dev:db`; Prisma connection/schema failures return translated 503 responses; frontend checks `/ready` before session loads; root `npm run dev` stops both processes when one fails. | **Fixed in code/tests.** PostgreSQL-backed startup remains environment-dependent. |
 | B11 — missing Node version | Minimum version declared in manifests; Node 22.13 in CI/Docker and in this run's environment. | **Fixed and local compatibility tested.** Not tested on all target hosts. |
 | B12 — RFID write timeout with no card | Reader validates missing UID before selecting/writing and returns a safe timeout instead of terminating the loop. | **Fixed in code; Python syntax passed.** No hardware/reader available for functional testing. |
 | B13 — systemd unit with inconsistent paths/account | Unit uses a dedicated user/group, installation paths, env file consistent with permission 600, restart, and hardening. | **Fixed in file.** `systemd-analyze verify` could not complete because `/opt/eduassets-rfid/venv/bin/python3` is not present in the sandbox; target-host verification/installation remains pending. |
@@ -45,7 +45,7 @@
 | D4 — junk/markup | Editorial marker removed; attribute separated and safe; obsolete references reviewed; redundant configs and metadata/lockfiles aligned. | **Fixed; final search found no editorial markers or stale claims in active docs.** |
 | D5 — Guest UX | `data-requires-auth`/`data-requires-admin` actions have visual styling indicating unavailability in Guest/Editor; backend remains authoritative. | **Partially improved.** Keyboard/screen-reader support and accessibility QA not manually validated. |
 | P0 — deployment artifacts | Multi-stage Docker, loopback/RFID-off Compose, direct Node entrypoint, Nginx/Cloudflare template with explicit RFID denies, production env, liveness/readiness, backup/restore only on empty DB, and PT/EN guides. | **Source/template fixes written.** Docker/Nginx/backup/restore/monitoring not run in a real service. |
-| CI/health/login timing/cleanup | GitHub Actions now includes a dedicated production smoke job with PostgreSQL, migration image, omitted `DIRECT_URL`, `/ready` polling, read-only runtime and shutdown check, alongside existing tests/builds. | **New job not run.** Hosted run `39806752284` passed only the prior `verify` job on base HEAD `408cb82641b8546689647c0f4fd5e355a35a9feb`; it does not cover these uncommitted local changes. |
+| CI/health/login timing/cleanup | GitHub Actions now includes a dedicated production smoke job with PostgreSQL, migration image, omitted `DIRECT_URL`, `/ready` polling, read-only runtime and shutdown check, alongside existing tests/builds. | **Current commit not validated by hosted CI.** Hosted run `39806752284` covered only an earlier `verify` job and does not cover this commit or the production smoke job. |
 
 ## Main files and artifacts
 
@@ -61,7 +61,7 @@ Clean lockfile-based installation passed at the root, backend, and frontend (`np
 
 | Check | Result |
 |---|---|
-| `JWT_SECRET=<synthetic> NODE_ENV=test npm --prefix backend test` | **28/28 tests passed**, including Prisma availability/schema classification. |
+| `JWT_SECRET=<synthetic> NODE_ENV=test npm --prefix backend test` | **29/29 tests passed**, including Prisma availability/schema classification. |
 | `DATABASE_URL=<synthetic> env -u DIRECT_URL npx prisma validate --config prisma.config.ts` and the same command with `DIRECT_URL=''` | **Both passed**, confirming omitted and empty fallback paths. |
 | `DATABASE_URL=<synthetic> npm --prefix backend run build` | **Passed**, including `prisma generate` and TypeScript. |
 | `npm --prefix frontend run typecheck` | **Passed.** |

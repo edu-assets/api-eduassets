@@ -52,8 +52,9 @@ export async function listarUsuarios() {
 }
 
 export async function criarUsuario(dados: UsuarioCreateInput) {
-  const existente = await prisma.usuario.findUnique({
-    where: { login: dados.login },
+  const login = dados.login.trim().toLowerCase();
+  const existente = await prisma.usuario.findFirst({
+    where: { login: { equals: login, mode: 'insensitive' } },
   });
 
   if (existente) {
@@ -65,7 +66,7 @@ export async function criarUsuario(dados: UsuarioCreateInput) {
   const usuario = await prisma.usuario.create({
     data: {
       nome: dados.nome,
-      login: dados.login,
+      login,
       passwordHash,
       nivelAcesso: dados.nivelAcesso,
     },

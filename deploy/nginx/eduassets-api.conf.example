@@ -18,11 +18,11 @@ server {
     real_ip_recursive on;
 
     # RFID bridge/auth is reserved for the isolated local kiosk, never the public API.
-    location = /auth/rfid {
+    location ~* ^/auth/rfid(?:/|$) {
         return 404;
     }
 
-    location = /ws/rfid {
+    location ~* ^/ws/rfid(?:/|$) {
         return 404;
     }
 
