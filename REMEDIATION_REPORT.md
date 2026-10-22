@@ -19,17 +19,21 @@
 
 No sandbox, exclusivamente com dados e credenciais sintéticos:
 
-- Backend: `JWT_SECRET=<synthetic> NODE_ENV=test npm test` passou em 29/29 testes, incluindo a classificação de falhas Prisma. Build TypeScript e `prisma generate` passaram.
+- Backend: `JWT_SECRET=<synthetic> NODE_ENV=test npm test` passou em 30/30 testes, incluindo a classificação de falhas Prisma. Build TypeScript e `prisma generate` passaram.
 - `prisma validate` passou com `DIRECT_URL` omitido e com `DIRECT_URL=''`, usando `DATABASE_URL` sintética como fallback.
 - Frontend: 36 testes em 9 arquivos, `npm run typecheck` e `VITE_API_BASE_URL=https://api.eduassets.tech npm run build` passaram.
 - Asserções estáticas da CSP e dos blocos Nginx RFID passaram; `git diff --check` passou.
-- O remote Git canônico (`edu-assets/eduAssets`) foi confirmado no HEAD `408cb82641b8546689647c0f4fd5e355a35a9feb`; `package.json` foi alinhado ao mesmo repositório, corrigindo o metadata antigo `dasilva-thiago/edu-assets`.
-- Docker, PostgreSQL local, `pg_isready`, Nginx e Compose não estão disponíveis neste sandbox. Portanto, migrations, seed, testes de integração, build/execução da imagem, `/ready` contra PostgreSQL, shutdown do container e `nginx -t` não foram executados.
-- O run hospedado `39806752284` passou para o repositório `edu-assets/eduAssets` em um HEAD anterior; ele não valida este conjunto de alterações. O novo job de smoke em `NODE_ENV=production` ainda não foi executado; o hostname `api.eduassets.tech` também não teve DNS, TLS, Vercel ou headers reais verificados.
+- O remote Git canônico (`edu-assets/eduAssets`) foi confirmado; o checkout atual contém as correções desta rodada; `package.json` foi alinhado ao mesmo repositório, corrigindo o metadata antigo `dasilva-thiago/edu-assets`.
+- Docker, PostgreSQL local, `pg_isready`, Nginx e Compose não estão disponíveis neste sandbox; YAML foi validado com PyYAML localmente. Portanto, migrations, seed, testes de integração, build/execução da imagem, `/ready` contra PostgreSQL, shutdown do container e `nginx -t` não foram executados.
+- O run hospedado `39806752284` pertence a um HEAD anterior e não valida este conjunto de alterações. O novo job de smoke em `NODE_ENV=production` ainda não foi executado; o hostname `api.eduassets.tech` também não teve DNS, TLS, Vercel ou headers reais verificados.
 
 O build do frontend emitiu avisos não bloqueantes sobre loader/configuração Vite, CSS vazio em `footer.css` e chunk ExcelJS acima de 500 kB. Não foram feitas otimizações fora do escopo.
 
 A documentação oficial do PostgreSQL descreve o comportamento de verificação TLS do libpq; os parâmetros efetivos devem ser confirmados separadamente para libpq e Prisma [1].
+
+## Auditoria de dependências
+
+A auditoria completa do backend reportou três vulnerabilidades high na cadeia de desenvolvimento `prisma` → `@prisma/config` → `deepmerge-ts` (GHSA-ggr8-5vv4-36mx, stack exhaustion em grafos recursivos). `npm audit --omit=dev` ainda reportou a cadeia do Prisma no lockfile atual; o resultado observado foi de 3 high. A origem é a cadeia da ferramenta Prisma no lockfile; o impacto do runtime de produção precisa ser confirmado no container com instalação omitindo devDependencies; não foi aplicado `npm audit fix --force` nem upgrade major sem validação. Reavaliar quando houver versão Prisma compatível que elimine a cadeia.
 
 ## Pendências e checklist do operador
 

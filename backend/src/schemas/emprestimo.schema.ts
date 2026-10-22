@@ -10,11 +10,11 @@ export const emprestimoCreateSchema = z.object({
   responsavelId: z.number().int().positive('Responsável inválido.'),
   dataRetirada: z.string().refine((v) => !Number.isNaN(Date.parse(v)), 'Data inválida.').optional(),
   observacao: z.string().max(2000).optional(),
-  itens: z.array(itemEmprestimoSchema).min(1, 'É necessário informar ao menos um item.'),
+  itens: z.array(itemEmprestimoSchema).min(1, 'É necessário informar ao menos um item.').max(100, 'O empréstimo pode conter no máximo 100 itens.'),
 });
 
 export const emprestimoUpdateItensSchema = z.object({
-  itens: z.array(itemEmprestimoSchema).min(1, 'É necessário informar ao menos um item.'),
+  itens: z.array(itemEmprestimoSchema).min(1, 'É necessário informar ao menos um item.').max(100, 'O empréstimo pode conter no máximo 100 itens.'),
 });
 
 export type ItemEmprestimoSchemaInput = z.infer<typeof itemEmprestimoSchema>;

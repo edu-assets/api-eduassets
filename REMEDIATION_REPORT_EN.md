@@ -38,7 +38,7 @@
 | P2 — loan/incident concurrency | Lock/conditional transitions in transactions prevent concurrent returns, edits, resolution/deletion, and duplicate inventory; concurrent HTTP tests created. | **Implemented; integration suite compiles.** Not run against PostgreSQL; concurrent state in the database not verified. |
 | P2 — API host/network | Compose publishes only `127.0.0.1`; bridge is outside public Compose. | **Template created; Docker and firewall unavailable/not run.** |
 | P2 — reusable RFID token | Card uses an opaque random token; server persists hash; session JWT is not stored on the card. | **Risk reduced, not eliminated:** MIFARE is clonable and key/card security depends on hardware; RFID is isolated and disabled publicly, and must not be called secure MFA. |
-| P2 — integration coverage | 5 HTTP tests cover Guest/denial, login/password, concurrent return, edit-vs-return, and concurrent resolution with inventory. | **Added and compiles.** Execution requires disposable PostgreSQL in CI; not run locally. |
+| P2 — integration coverage | 9 HTTP/concurrency/auth integration tests cover Guest/denial, login/password, concurrent return, edit-vs-return, concurrent resolution with inventory, and session revocation. | **Added and compiles.** All 9 tests require disposable PostgreSQL; execution was not run in this sandbox. |
 | D1 — Vercel/API/CSP | Vercel is the primary configuration; `VITE_API_BASE_URL` required in production build; CSP allows only `'self'` plus the documented intended `https://api.eduassets.tech`; alternative `_headers` removed. | **Code/docs aligned and static assertion passed.** DNS, Vercel preview, and actual headers not verified; hostname remains an operator assumption. |
 | D2 — inconsistent READMEs | READMEs and docs updated for scripts, Guest, ports, return, env, and deployment limits. | **PT/EN pairs reviewed; Markdown relative-link check found 0 missing links across 23 files.** The PDF retains both language headings; the internal report is not published with frontend assets. |
 | D3 — MIT/ISC license | `LICENSE` and manifests aligned to MIT. | **Fixed.** |
@@ -57,11 +57,11 @@
 
 ## Local evidence
 
-Clean lockfile-based installation passed at the root, backend, and frontend (`npm ci`, using `--prefix` for both packages). Backend installation reported 3 high-severity audit findings in existing dependency resolution; no bulk updates or `npm audit fix` were made. Frontend installation emitted deprecated transitive dependency warnings.
+Clean lockfile-based installation passed at the root, backend, and frontend (`npm ci`, using `--prefix` for both packages). Backend full audit reports 3 high-severity findings in the Prisma development toolchain (`prisma` → `@prisma/config` → `deepmerge-ts`); `npm audit --omit=dev` still reports the Prisma chain in the current lockfile; the observed result was 3 high. The advisory is tracked to the Prisma 6 toolchain in the lockfile; production-image impact still requires a real `npm ci --omit=dev`/container check, and no unsafe major upgrade or forced audit fix was applied. Frontend installation emitted deprecated transitive dependency warnings.
 
 | Check | Result |
 |---|---|
-| `JWT_SECRET=<synthetic> NODE_ENV=test npm --prefix backend test` | **29/29 tests passed**, including Prisma availability/schema classification. |
+| `JWT_SECRET=<synthetic> NODE_ENV=test npm --prefix backend test` | **30/30 tests passed**, including Prisma availability/schema classification. |
 | `DATABASE_URL=<synthetic> env -u DIRECT_URL npx prisma validate --config prisma.config.ts` and the same command with `DIRECT_URL=''` | **Both passed**, confirming omitted and empty fallback paths. |
 | `DATABASE_URL=<synthetic> npm --prefix backend run build` | **Passed**, including `prisma generate` and TypeScript. |
 | `npm --prefix frontend run typecheck` | **Passed.** |
@@ -69,13 +69,13 @@ Clean lockfile-based installation passed at the root, backend, and frontend (`np
 | `VITE_API_BASE_URL=https://api.eduassets.tech npm --prefix frontend run build` | **Passed.** Warnings: Vite native loader, empty `footer.css`, and ExcelJS chunk above 500 kB. |
 | JSON parse, CSP/Nginx static assertions, and `git diff --check` | **Passed.** |
 
-Git remote canonicalization was confirmed as `edu-assets/eduAssets` at base HEAD `408cb82641b8546689647c0f4fd5e355a35a9feb`; root `package.json` metadata was corrected from the stale `dasilva-thiago/edu-assets` reference to the same repository.
+Git remote canonicalization was confirmed as `edu-assets/eduAssets`; the current checkout contains the fixes from this round; root `package.json` metadata was corrected from the stale `dasilva-thiago/edu-assets` reference to the same repository.
 
 ## Not run / blockers
 
 - `docker`, `podman`, `nginx`, `psql`, and `pg_restore` are unavailable in this environment. Migrations, seed, DB integration tests, image builds, Compose, Nginx, backup, or restore were not run. `systemd-analyze verify` did not complete because the unit's interpreter at its installation path is not present in this sandbox.
-- A YAML parser is not available in the installed packages; JSON and targeted source assertions passed, but workflow/Compose YAML did not receive automated local parsing.
-- The production smoke workflow was added but needs hosted execution or another Docker/PostgreSQL environment. Run `39806752284` passed for the canonical repository/base HEAD, but not for this unpushed working tree or its new smoke job.
+- Workflow and Compose YAML were parsed successfully with PyYAML; JSON and targeted source assertions also passed.
+- The production smoke workflow was added but needs hosted execution or another Docker/PostgreSQL environment. Run `39806752284` belongs to an earlier HEAD and does not validate this checkout or the new smoke job.
 - No credentials/authorization for Vercel, Oracle/VM, Cloudflare, domain, certificate, or managed database; no DNS, grant/RLS, firewall, secret, data, or remote service was changed.
 - No Raspberry Pi/reader/target OS to validate GPIO, card, systemd, or RFID UX. MIFARE cloning risk remains; keep RFID disabled on the public API.
 - In-memory administrator timeout is consistent only in a single instance; shared state is required before scaling.

@@ -7,7 +7,7 @@ export const ocorrenciaCreateSchema = z.object({
   }),
   problema: z.string().trim().min(1, 'Problema é obrigatório.').max(100),
   descricao: z.string().trim().min(1, 'Descrição é obrigatória.').max(2000),
-  numeros: z.array(z.string().trim().min(1).max(50)).min(1, 'Informe ao menos um número de patrimônio/identificador.'),
+  numeros: z.array(z.string().trim().min(1).max(50)).min(1, 'Informe ao menos um número de patrimônio/identificador.').max(100, 'Uma ocorrência pode conter no máximo 100 identificadores.'),
 });
 
 export const ocorrenciaUpdateSchema = z.object({

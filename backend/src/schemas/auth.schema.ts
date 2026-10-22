@@ -7,7 +7,7 @@ export const loginSchema = z.object({
 
 export const alterarSenhaSchema = z.object({
   senhaAtual: z.string().min(1, 'Informe a senha atual.').max(200),
-  novaSenha: z.string().min(8, 'A nova senha deve ter no mínimo 8 caracteres.').max(200),
+  novaSenha: z.string().min(12, 'A nova senha deve ter no mínimo 12 caracteres.').max(200),
 });
 
 export const rfidScanSchema = z.object({
