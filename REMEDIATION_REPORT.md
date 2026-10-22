@@ -13,14 +13,15 @@
 - Atualizada a CSP para permitir somente `https://api.eduassets.tech` além de `'self'`; esse é o hostname documentado/intencional, não uma verificação de DNS ou headers Vercel.
 - O Docker agora instala `openssl` no stage compartilhado (herdado por migração/runtime) e executa `node dist/src/server.js` diretamente; o CI ganhou um job de smoke em produção com PostgreSQL descartável, migrações, `/ready`, filesystem somente leitura e encerramento limpo.
 - O template Nginx retorna 404 para `/auth/rfid` e `/ws/rfid` na instância pública; o loopback do backend permanece apenas para o quiosque local e não é tratado como autenticação atrás de proxy.
+- O desenvolvimento local agora gera o Prisma Client e aplica migrations no `predev`; erros Prisma de conexão/schema retornam 503 traduzível, o frontend verifica `/ready` antes das cargas da sessão e `npm run dev` encerra o frontend se o backend falhar.
 
 ## Validação executada
 
 No sandbox, exclusivamente com dados e credenciais sintéticos:
 
-- Backend: `JWT_SECRET=<synthetic> NODE_ENV=test npm test` passou em 25/25 testes; uma execução sem `JWT_SECRET` falhou antes no teste de serviços por configuração ausente e foi repetida corretamente. Build TypeScript e `prisma generate` passaram.
+- Backend: `JWT_SECRET=<synthetic> NODE_ENV=test npm test` passou em 28/28 testes, incluindo a classificação de falhas Prisma. Build TypeScript e `prisma generate` passaram.
 - `prisma validate` passou com `DIRECT_URL` omitido e com `DIRECT_URL=''`, usando `DATABASE_URL` sintética como fallback.
-- Frontend: 35 testes em 9 arquivos, `npm run typecheck` e `VITE_API_BASE_URL=https://api.eduassets.tech npm run build` passaram.
+- Frontend: 36 testes em 9 arquivos, `npm run typecheck` e `VITE_API_BASE_URL=https://api.eduassets.tech npm run build` passaram.
 - Asserções estáticas da CSP e dos blocos Nginx RFID passaram; `git diff --check` passou.
 - O remote Git canônico (`edu-assets/eduAssets`) foi confirmado no HEAD `408cb82641b8546689647c0f4fd5e355a35a9feb`; `package.json` foi alinhado ao mesmo repositório, corrigindo o metadata antigo `dasilva-thiago/edu-assets`.
 - Docker, PostgreSQL local, `pg_isready`, Nginx e Compose não estão disponíveis neste sandbox. Portanto, migrations, seed, testes de integração, build/execução da imagem, `/ready` contra PostgreSQL, shutdown do container e `nginx -t` não foram executados.

@@ -1,6 +1,6 @@
 # Remediation Report — eduAssets
 
-**Date:** 22/10/2026 · **Scope:** changes in the current checkout, with no commit, push, deployment, remote database access, or infrastructure changes. This report supersedes the previous record, which contained obsolete statuses.
+**Date:** 22/10/2026 · **Scope:** source and deployment changes in the checkout; infrastructure and remote database were not accessed. This report supersedes the previous record, which contained obsolete statuses.
 
 ## Executive verdict
 
@@ -20,6 +20,7 @@
 | B8 — port/host contracts | `PORT` takes precedence over `BACKEND_PORT`; each supplied value is validated; default 3000; explicit bind/trust proxy for production. Bridge remains on 3001/loopback. | **Fixed in code/docs/unit tests.** Backend and hardware were not started simultaneously. |
 | B9 — Prisma generation/build/runtime | Build generates Prisma Client before TypeScript; the shared Docker stage explicitly installs `openssl` for build/migration/runtime; runtime invokes `node dist/src/server.js` directly; Node `>=22.12.0` aligned with CI/Docker. | **Clean install, generation, and local build passed.** Image build and runtime not run (Docker unavailable); actual OpenSSL/Prisma runtime compatibility remains unverified. |
 | B10 — inconsistent `DIRECT_URL` | Production Compose no longer injects an empty `DIRECT_URL`; runtime validation treats an empty optional value as absent; `prisma.config.ts` uses `DATABASE_URL` fallback; migration script explicitly uses config. | **Unit regression, schema validation with omitted/empty values, generation and build passed.** `migrate deploy`/seed not run without disposable PostgreSQL. |
+| B15 — local startup hid database failures | Backend `predev` now generates Prisma Client and applies committed migrations; Prisma connection/schema failures return translated 503 responses; frontend checks `/ready` before session loads; root `npm run dev` stops both processes when one fails. | **Fixed in code/tests.** PostgreSQL-backed startup remains environment-dependent. |
 | B11 — missing Node version | Minimum version declared in manifests; Node 22.13 in CI/Docker and in this run's environment. | **Fixed and local compatibility tested.** Not tested on all target hosts. |
 | B12 — RFID write timeout with no card | Reader validates missing UID before selecting/writing and returns a safe timeout instead of terminating the loop. | **Fixed in code; Python syntax passed.** No hardware/reader available for functional testing. |
 | B13 — systemd unit with inconsistent paths/account | Unit uses a dedicated user/group, installation paths, env file consistent with permission 600, restart, and hardening. | **Fixed in file.** `systemd-analyze verify` could not complete because `/opt/eduassets-rfid/venv/bin/python3` is not present in the sandbox; target-host verification/installation remains pending. |
@@ -60,11 +61,11 @@ Clean lockfile-based installation passed at the root, backend, and frontend (`np
 
 | Check | Result |
 |---|---|
-| `JWT_SECRET=<synthetic> NODE_ENV=test npm --prefix backend test` | **25/25 tests passed.** A first run without `JWT_SECRET` failed during service-test module loading; the correctly configured run passed. |
+| `JWT_SECRET=<synthetic> NODE_ENV=test npm --prefix backend test` | **28/28 tests passed**, including Prisma availability/schema classification. |
 | `DATABASE_URL=<synthetic> env -u DIRECT_URL npx prisma validate --config prisma.config.ts` and the same command with `DIRECT_URL=''` | **Both passed**, confirming omitted and empty fallback paths. |
 | `DATABASE_URL=<synthetic> npm --prefix backend run build` | **Passed**, including `prisma generate` and TypeScript. |
 | `npm --prefix frontend run typecheck` | **Passed.** |
-| `npm --prefix frontend test` | **35/35 tests across 9 files passed.** |
+| `npm --prefix frontend test` | **36/36 tests across 9 files passed.** |
 | `VITE_API_BASE_URL=https://api.eduassets.tech npm --prefix frontend run build` | **Passed.** Warnings: Vite native loader, empty `footer.css`, and ExcelJS chunk above 500 kB. |
 | JSON parse, CSP/Nginx static assertions, and `git diff --check` | **Passed.** |
 

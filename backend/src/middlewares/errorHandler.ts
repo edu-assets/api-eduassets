@@ -3,6 +3,17 @@ import type { NextFunction, Request, Response } from 'express';
 import { logger } from '../lib/logger.js';
 import { AppError } from '../errors/AppError.js';
 
+const DATABASE_UNAVAILABLE_CODES = new Set(['P1000', 'P1001', 'P1002', 'P1017', 'P2024']);
+const DATABASE_SCHEMA_CODES = new Set(['P2021', 'P2022']);
+
+export function classifyDatabaseError(err: unknown): 'unavailable' | 'schema' | null {
+  if (err instanceof Prisma.PrismaClientInitializationError) return 'unavailable';
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return null;
+  if (DATABASE_UNAVAILABLE_CODES.has(err.code)) return 'unavailable';
+  if (DATABASE_SCHEMA_CODES.has(err.code)) return 'schema';
+  return null;
+}
+
 export function errorHandler(err: unknown, req: Request, res: Response, next: NextFunction): void {
   if (res.headersSent) {
     next(err);
@@ -33,6 +44,16 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     logger.warn(`Prisma known error [${err.code}] em ${req.method} ${req.originalUrl}: ${err.message}`);
 
+    const databaseError = classifyDatabaseError(err);
+    if (databaseError === 'unavailable') {
+      res.status(503).json({ erro: 'backend.geral.banco_indisponivel' });
+      return;
+    }
+    if (databaseError === 'schema') {
+      res.status(503).json({ erro: 'backend.geral.banco_nao_inicializado' });
+      return;
+    }
+
     switch (err.code) {
       case 'P2025':
         res.status(404).json({ erro: 'backend.geral.registro_nao_encontrado' });
@@ -47,6 +68,12 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
         res.status(400).json({ erro: 'backend.geral.erro_processar_requisicao' });
         return;
     }
+  }
+
+  if (err instanceof Prisma.PrismaClientInitializationError) {
+    logger.error(`Prisma não conseguiu inicializar em ${req.method} ${req.originalUrl}`, { error: err.message });
+    res.status(503).json({ erro: 'backend.geral.banco_indisponivel' });
+    return;
   }
 
   // Erros inesperados: loga stack completa, responde mensagem genérica segura

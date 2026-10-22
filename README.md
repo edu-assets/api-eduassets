@@ -160,7 +160,7 @@ From the root:
 npm run dev
 ```
 
-This invokes `backend` in `tsx watch` mode and the Vite frontend together. Open `http://localhost:5173`. To run one side separately:
+Before starting `backend`, its `predev` script generates Prisma Client and applies committed migrations with `prisma migrate deploy`. It does not create the database or start PostgreSQL; configure `backend/.env` and the PostgreSQL service first. If the API or migrations fail, `concurrently` now stops the frontend too instead of leaving an interface open without a backend. Once ready, the command invokes `backend` in `tsx watch` mode and the Vite frontend together. Open `http://localhost:5173`. To run one side separately:
 
 ```bash
 cd backend && npm run dev

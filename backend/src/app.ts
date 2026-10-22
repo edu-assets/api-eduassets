@@ -42,7 +42,7 @@ app.get('/health', (_req, res) => {
 app.get('/ready', async (_req, res) => {
   const ready = await checkReadiness(() => prisma.$queryRaw`SELECT 1`);
   if (ready) res.json({ status: 'ready' });
-  else res.status(503).json({ status: 'unavailable' });
+  else res.status(503).json({ status: 'unavailable', erro: 'backend.geral.banco_indisponivel' });
 });
 
 app.get('/', (_req, res) => {
