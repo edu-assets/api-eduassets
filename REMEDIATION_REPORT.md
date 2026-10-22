@@ -18,21 +18,24 @@ No sandbox, exclusivamente com dados e credenciais sintéticos:
 - Backend: 24 testes unitários, build TypeScript e `prisma validate` aprovados; a suíte de integração passou em 9/9 casos.
 - PostgreSQL 16 local descartável: as 6 migrations aplicaram do zero; seed executado duas vezes. Uma segunda execução com outra senha não substituiu a senha cadastrada, confirmada pelo teste de login. Cobertos Guest DTOs/negação, logout e troca de senha revogáveis, estoque e concorrência de empréstimos/ocorrências.
 - `tsc --noEmit -p tsconfig.integration.json`, parse Python/JSON/YAML, `sh -n` dos scripts e `git diff --check` passaram. O PDF atualizado contém 17 páginas e foi inspecionado visualmente.
-- A primeira execução hospedada do GitHub Actions falhou antes dos testes por falta de Prisma Client gerado antes do seed. O workflow agora executa explicitamente `prisma:generate` antes de migration/seed; a execução hospedada após essa correção ainda está pendente.
+- A primeira execução hospedada falhou porque o Prisma Client ainda não tinha sido gerado antes do seed. O workflow foi corrigido e a execução `9842516` passou integralmente: migration/seed, testes, builds frontend/backend, startup/readiness, targets Docker runtime/migration e validação de configuração Compose. [Execução CI](https://github.com/edu-assets/eduAssets/actions/runs/39805708848).
 
 Os builds aprovados mantêm avisos não bloqueantes já observados: loader/configuração Vite, CSS vazio em `footer.css` e chunk ExcelJS acima de 500 kB. Não foram feitas otimizações fora do escopo de segurança e release.
+
+O runner também emitiu avisos de migração de Actions Node 20 e do label `ubuntu-latest`; o job passou usando os runtimes disponibilizados. Revisar versões de Actions e imagem do runner antes de uma atualização planejada do CI.
 
 A documentação oficial do PostgreSQL descreve que `verify-full` valida a cadeia de confiança e o hostname, e recomenda esse modo em ambientes sensíveis [1].
 
 ## Pendências e checklist do operador
 
-- [ ] Confirmar GitHub Actions hospedado verde após a correção da ordem do Prisma. O build/teste Docker/Compose hospedado não chegou a rodar na execução que falhou; a sintaxe YAML local passou.
+- [x] Confirmar GitHub Actions hospedado verde após a correção do Prisma, incluindo builds Docker e parse da configuração Compose.
+- [ ] Executar o stack Compose e validar Nginx (`nginx -t`) no host-alvo. CI construiu as imagens, mas não subiu o stack de produção.
 - [ ] Validar Nginx com `nginx -t`, DNS, firewall, origem e ranges Cloudflare atuais, CORS/CSP e headers no host real.
 - [ ] Em PostgreSQL gerenciado, confirmar hostname/CA do provedor e conexão TLS verificada; fazer backup antes da migration, aplicar primeiro em staging e comprovar restauração em banco vazio.
 - [ ] Planejar novo login dos usuários na release da migration `sessionVersion`, que invalida tokens emitidos sem o novo claim. Se a chamada de logout estiver offline/falhar, token copiado pode continuar válido até expirar.
 - [ ] Aprovar grants/RLS e retenção de dados no provedor, monitoramento/RPO/RTO, QA manual de navegador/acessibilidade e hardware RFID. Manter RFID público desativado até teste de rede e hardware.
 
-Nenhum banco remoto, dado real, segredo, DNS, host, firewall ou serviço de produção foi acessado/alterado; não houve deployment. Docker/Compose, Nginx, resultado final do CI hospedado, backup/restore externo, Vercel, TLS gerenciado, browser em produção e hardware permanecem não verificados. A atividade de inatividade Admin ainda usa estado em memória e requer uma instância até que seja compartilhada.
+Nenhum banco remoto, dado real, segredo, DNS, host, firewall ou serviço de produção foi acessado/alterado; não houve deployment. Execução do stack Compose, Nginx, backup/restore externo, Vercel, TLS gerenciado, browser em produção e hardware permanecem não verificados. A atividade de inatividade Admin ainda usa estado em memória e requer uma instância até que seja compartilhada.
 
 ## Arquivos-chave
 
