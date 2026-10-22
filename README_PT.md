@@ -160,7 +160,7 @@ Na raiz:
 npm run dev
 ```
 
-Antes de iniciar o `backend`, o script `predev` gera o Prisma Client e aplica as migrations versionadas com `prisma migrate deploy`. O comando não cria o banco nem inicia o PostgreSQL; configure `backend/.env` e o serviço PostgreSQL antes de executá-lo. Se a API ou as migrations falharem, `concurrently` encerra também o frontend em vez de deixar a interface aberta sem backend. Com tudo pronto, o comando inicia em conjunto o `backend` no modo `tsx watch` e o frontend Vite. Abra `http://localhost:5173`. Para executar cada lado separadamente:
+Antes de iniciar o `backend`, confirme que `backend/.env` aponta para um banco de desenvolvimento e, se necessário, aplique as migrations explicitamente com `cd backend && npm run dev:db`. O `npm run dev` não aplica migrations automaticamente: isso evita que um `.env` apontando para um banco remoto bloqueie o terminal ou sofra alterações sem confirmação. A geração do Prisma Client ocorre no `npm ci` e no build; ela não é repetida a cada startup, evitando bloqueios da DLL nativa no Windows quando VS Code, Node ou antivírus mantêm o arquivo aberto. O comando não cria o banco nem inicia o PostgreSQL; configure o serviço PostgreSQL antes de executá-lo. Se a API falhar, `concurrently` encerra também o frontend em vez de deixar a interface aberta sem backend. Com tudo pronto, o comando inicia em conjunto o `backend` no modo `tsx watch` e o frontend Vite. Abra `http://localhost:5173`. Para executar cada lado separadamente:
 
 ```bash
 cd backend && npm run dev

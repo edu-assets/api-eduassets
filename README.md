@@ -160,7 +160,7 @@ From the root:
 npm run dev
 ```
 
-Before starting `backend`, its `predev` script generates Prisma Client and applies committed migrations with `prisma migrate deploy`. It does not create the database or start PostgreSQL; configure `backend/.env` and the PostgreSQL service first. If the API or migrations fail, `concurrently` now stops the frontend too instead of leaving an interface open without a backend. Once ready, the command invokes `backend` in `tsx watch` mode and the Vite frontend together. Open `http://localhost:5173`. To run one side separately:
+Before starting `backend`, confirm that `backend/.env` points to a development database and, if needed, apply migrations explicitly with `cd backend && npm run dev:db`. `npm run dev` does not apply migrations automatically: this prevents a `.env` pointing to a remote database from blocking the terminal or changing data without confirmation. Prisma Client generation runs during `npm ci` and builds, not on every startup; this avoids Windows native-DLL locks when VS Code, Node, or antivirus software still holds the file open. It does not create the database or start PostgreSQL; configure the PostgreSQL service first. If the API fails, `concurrently` now stops the frontend too instead of leaving an interface open without a backend. Once ready, the command invokes `backend` in `tsx watch` mode and the Vite frontend together. Open `http://localhost:5173`. To run one side separately:
 
 ```bash
 cd backend && npm run dev

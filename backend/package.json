@@ -26,8 +26,8 @@
     "@types/morgan": "^1.9.10"
   },
   "scripts": {
-    "predev": "npm run prisma:generate && npm run migrate:deploy",
     "dev": "tsx watch src/server.ts",
+    "dev:db": "npm run migrate:deploy",
     "build": "npm run prisma:generate && tsc",
     "test": "tsx --test tests/**/*.test.ts",
     "start": "node dist/src/server.js",
