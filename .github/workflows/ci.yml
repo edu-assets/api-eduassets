@@ -81,8 +81,8 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require('fs');
-          const vercel = JSON.parse(fs.readFileSync('frontend/vercel.json', 'utf8'));
-          const csp = vercel.headers.flatMap((entry) => entry.headers).find((entry) => entry.key === 'Content-Security-Policy')?.value ?? '';
+          const pagesHeaders = fs.readFileSync('frontend/public/_headers', 'utf8');
+          const csp = pagesHeaders.match(/Content-Security-Policy:\s*(.+)/)?.[1] ?? '';
           if (!csp.includes("connect-src 'self' https://api.eduassets.tech")) throw new Error('CSP does not allow the documented API origin');
           if (csp.includes("connect-src 'self';")) throw new Error('CSP still restricts connect-src to self only');
           NODE

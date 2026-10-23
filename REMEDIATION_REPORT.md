@@ -10,7 +10,7 @@
 - Adicionadas constraints SQL e índices em migration Prisma compatível com a versão 6. Seed exige contas explícitas, não sobrescreve contas/senhas existentes e rejeita admin/editor com email duplicado.
 - Atualizada documentação PT/EN sobre TLS PostgreSQL, separando parâmetros libpq de parâmetros Prisma, operação de proxy/Cloudflare, limites de backup, efeito de reautenticação após migration e o PDF bilíngue do manual.
 - Corrigido o contrato opcional de `DIRECT_URL`: Compose não o injeta vazio, a validação trata string vazia como ausente, o Prisma usa `DATABASE_URL` como fallback e há regressão explícita.
-- Atualizada a CSP para permitir somente `https://api.eduassets.tech` além de `'self'`; esse é o hostname documentado/intencional, não uma verificação de DNS ou headers Vercel.
+- Atualizada a CSP para permitir somente `https://api.eduassets.tech` além de `'self'`; esse é o hostname documentado/intencional, não uma verificação de DNS ou headers Cloudflare Pages.
 - O Docker agora instala `openssl` no stage compartilhado (herdado por migração/runtime) e executa `node dist/src/server.js` diretamente; o CI ganhou um job de smoke em produção com PostgreSQL descartável, migrações, `/ready`, filesystem somente leitura e encerramento limpo.
 - O template Nginx retorna 404 para `/auth/rfid` e `/ws/rfid` na instância pública; o loopback do backend permanece apenas para o quiosque local e não é tratado como autenticação atrás de proxy.
 - O desenvolvimento local gera o Prisma Client no install/build e aplica migrations somente por comando explícito `npm run dev:db`; erros Prisma de conexão/schema retornam 503 traduzível, o frontend verifica `/ready` antes das cargas da sessão e `npm run dev` encerra o frontend se o backend falhar.
@@ -25,7 +25,7 @@ No sandbox, exclusivamente com dados e credenciais sintéticos:
 - Asserções estáticas da CSP e dos blocos Nginx RFID passaram; `git diff --check` passou.
 - O remote Git canônico (`edu-assets/eduAssets`) foi confirmado; o checkout atual contém as correções desta rodada; `package.json` foi alinhado ao mesmo repositório, corrigindo o metadata antigo `dasilva-thiago/edu-assets`.
 - Docker, PostgreSQL local, `pg_isready`, Nginx e Compose não estão disponíveis neste sandbox; YAML foi validado com PyYAML localmente. Portanto, migrations, seed, testes de integração, build/execução da imagem, `/ready` contra PostgreSQL e shutdown do container não foram executados localmente; todos esses checks, exceto `nginx -t`, passaram no CI hospedado `39875293195` nos jobs `verify` e `production-smoke`.
-- O run hospedado `39875293195` corresponde ao HEAD `a8cd39b` e passou nos jobs `verify` e `production-smoke`; o run antigo `39806752284` permanece apenas como evidência histórica; o hostname `api.eduassets.tech` também não teve DNS, TLS, Vercel ou headers reais verificados.
+- O run hospedado `39875293195` corresponde ao HEAD `a8cd39b` e passou nos jobs `verify` e `production-smoke`; o run antigo `39806752284` permanece apenas como evidência histórica; o hostname `api.eduassets.tech` também não teve DNS, TLS, Cloudflare Pages ou headers reais verificados.
 
 O build do frontend emitiu avisos não bloqueantes sobre loader/configuração Vite, CSS vazio em `footer.css` e chunk ExcelJS acima de 500 kB. Não foram feitas otimizações fora do escopo.
 
@@ -43,7 +43,7 @@ A auditoria completa do backend reportou três vulnerabilidades high na cadeia d
 - [ ] Planejar novo login dos usuários na release da migration `sessionVersion`, que invalida tokens emitidos sem o novo claim. Se a chamada de logout estiver offline/falhar, token copiado pode continuar válido até expirar.
 - [ ] Aprovar grants/RLS e retenção de dados no provedor, monitoramento/RPO/RTO, QA manual de navegador/acessibilidade e hardware RFID. Manter RFID público desativado até teste de rede e hardware.
 
-Nenhum banco remoto, dado real, segredo, DNS, host, firewall ou serviço de produção foi acessado/alterado; não houve deployment. Execução do stack Compose, container contra PostgreSQL, Nginx, backup/restore externo, Vercel, TLS gerenciado, browser em produção e hardware permanecem não verificados. A atividade de inatividade Admin ainda usa estado em memória e requer uma instância até que seja compartilhada.
+Nenhum banco remoto, dado real, segredo, DNS, host, firewall ou serviço de produção foi acessado/alterado; não houve deployment. Execução do stack Compose, container contra PostgreSQL, Nginx, backup/restore externo, Cloudflare Pages, TLS gerenciado, browser em produção e hardware permanecem não verificados. A atividade de inatividade Admin ainda usa estado em memória e requer uma instância até que seja compartilhada.
 
 ## Arquivos-chave
 

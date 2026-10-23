@@ -4,7 +4,7 @@
 
 ## Executive verdict
 
-**Not ready for production.** The listed source and deployment blockers were addressed in this checkout, and unit tests, typecheck, builds, schema validation, CSP assertions, and Nginx static assertions passed locally. The production container was not run locally because Docker/PostgreSQL/Nginx are unavailable in this sandbox; hosted CI run `39875293195` passed both `verify` and `production-smoke`, including disposable PostgreSQL, migrations, seed idempotency, integration tests, production readiness and image builds. Proxy, TLS, backup/restore, Vercel, and hardware remain unvalidated. The existence of templates is not evidence of operation.
+**Not ready for production.** The listed source and deployment blockers were addressed in this checkout, and unit tests, typecheck, builds, schema validation, CSP assertions, and Nginx static assertions passed locally. The production container was not run locally because Docker/PostgreSQL/Nginx are unavailable in this sandbox; hosted CI run `39875293195` passed both `verify` and `production-smoke`, including disposable PostgreSQL, migrations, seed idempotency, integration tests, production readiness and image builds. Proxy, TLS, backup/restore, Cloudflare Pages, and hardware remain unvalidated. The existence of templates is not evidence of operation.
 
 ## Findings and execution matrix
 
@@ -14,7 +14,7 @@
 | B2 — asynchronous admin middleware | Authorization flow awaits/propagates authentication failures. | **Fixed in code.** No HTTP test with a database in this run. |
 | B3 — bridge/WebSocket without flag/invalid routes | Startup requires `RFID_BRIDGE_ENABLED=true`; invalid upgrades are rejected; public Compose forces RFID off; the public Nginx template returns 404 for `/auth/rfid` and `/ws/rfid`. | **Fixed in code/template.** Proxy/network simulation not run. |
 | B4 — default JWT secret | `JWT_SECRET` is required wherever a token is used, with a minimum of 32 characters; no predictable fallback. | **Fixed and covered by config/JWT tests.** Production secret remains external. |
-| B5 — disabled frameguard | Security headers re-enabled; Vercel contains CSP, anti-frame, MIME, referrer, and permissions headers. | **Fixed in code/config.** Headers actually served by Vercel not verified. |
+| B5 — disabled frameguard | Security headers re-enabled; Cloudflare Pages uses the `_headers` file for CSP, anti-frame, MIME, referrer, and permissions headers. | **Fixed in code/config.** Headers actually served by Cloudflare Pages not verified. |
 | B6 — CORS/environment detection | Central config validates `NODE_ENV`, exact HTTP(S) origins, allowlist, and trust proxy; permissive mode limited to local development. | **Fixed in code/unit tests.** End-to-end CORS/preflight not run. |
 | B7 — personal data in public reads / PostgREST | Endpoint allowlist DTOs minimize loans/incidents/equipment; guardians and users require login; Guest remains read-only. The app uses Prisma directly and no PostgREST route was identified. | **API minimization fixed/tested.** Provider not accessed; grants/RLS apply only if that service is exposed. Isolated synthetic demo database was not provisioned. |
 | B8 — port/host contracts | `PORT` takes precedence over `BACKEND_PORT`; each supplied value is validated; default 3000; explicit bind/trust proxy for production. Bridge remains on 3001/loopback. | **Fixed in code/docs/unit tests.** Backend and hardware were not started simultaneously. |
@@ -39,7 +39,7 @@
 | P2 — API host/network | Compose publishes only `127.0.0.1`; bridge is outside public Compose. | **Template created; Docker and firewall unavailable/not run.** |
 | P2 — reusable RFID token | Card uses an opaque random token; server persists hash; session JWT is not stored on the card. | **Risk reduced, not eliminated:** MIFARE is clonable and key/card security depends on hardware; RFID is isolated and disabled publicly, and must not be called secure MFA. |
 | P2 — integration coverage | 9 HTTP/concurrency/auth integration tests cover Guest/denial, login/password, concurrent return, edit-vs-return, concurrent resolution with inventory, and session revocation. | **Added and compiles.** All 9 tests passed in hosted `verify` against disposable PostgreSQL. |
-| D1 — Vercel/API/CSP | Vercel is the primary configuration; `VITE_API_BASE_URL` required in production build; CSP allows only `'self'` plus the documented intended `https://api.eduassets.tech`; alternative `_headers` removed. | **Code/docs aligned and static assertion passed.** DNS, Vercel preview, and actual headers not verified; hostname remains an operator assumption. |
+| D1 — Cloudflare Pages/API/CSP | Cloudflare Pages is the primary configuration; `VITE_API_BASE_URL` required in production build; CSP allows only `'self'` plus the documented intended `https://api.eduassets.tech`; the Pages `_headers` file is versioned. | **Code/docs aligned and static assertion passed.** DNS, Pages preview, and actual headers not verified; hostname remains an operator assumption. |
 | D2 — inconsistent READMEs | READMEs and docs updated for scripts, Guest, ports, return, env, and deployment limits. | **PT/EN pairs reviewed; Markdown relative-link check found 0 missing links across 23 files.** The PDF retains both language headings; the internal report is not published with frontend assets. |
 | D3 — MIT/ISC license | `LICENSE` and manifests aligned to MIT. | **Fixed.** |
 | D4 — junk/markup | Editorial marker removed; attribute separated and safe; obsolete references reviewed; redundant configs and metadata/lockfiles aligned. | **Fixed; final search found no editorial markers or stale claims in active docs.** |
@@ -75,8 +75,8 @@ Git remote canonicalization was confirmed as `edu-assets/eduAssets`; the current
 
 - `docker`, `podman`, `nginx`, `psql`, and `pg_restore` are unavailable in this environment. Migrations, seed, DB integration tests, image builds and production readiness passed in hosted CI; local Compose/Nginx, backup, and restore were not run. `systemd-analyze verify` did not complete because the unit's interpreter at its installation path is not present in this sandbox.
 - Workflow and Compose YAML were parsed successfully with PyYAML; JSON and targeted source assertions also passed.
-- The production smoke workflow passed in hosted run `39875293195` for HEAD `a8cd39b`. External proxy, TLS, backup/restore, Vercel, DNS, firewall, monitoring and hardware remain pending.
-- No credentials/authorization for Vercel, Oracle/VM, Cloudflare, domain, certificate, or managed database; no DNS, grant/RLS, firewall, secret, data, or remote service was changed.
+- The production smoke workflow passed in hosted run `39875293195` for HEAD `a8cd39b`. External proxy, TLS, backup/restore, Cloudflare Pages, DNS, firewall, monitoring and hardware remain pending.
+- No credentials/authorization for Cloudflare Pages, Oracle/VM, Cloudflare, domain, certificate, or managed database; no DNS, grant/RLS, firewall, secret, data, or remote service was changed.
 - No Raspberry Pi/reader/target OS to validate GPIO, card, systemd, or RFID UX. MIFARE cloning risk remains; keep RFID disabled on the public API.
 - In-memory administrator timeout is consistent only in a single instance; shared state is required before scaling.
 - Browser QA, accessibility, real CORS/proxy, rate limiting with NAT/Cloudflare, and opening in Excel/LibreOffice remain pending.
@@ -85,7 +85,7 @@ Git remote canonicalization was confirmed as `edu-assets/eduAssets`; the current
 
 - [ ] **Before public demo:** green CI; PostgreSQL and Docker tests; dedicated synthetic demo DB; `VITE_API_BASE_URL`, CSP, CORS, proxy, firewall, TLS, and headers verified on host; RFID off.
 - [ ] **Before personal/school data:** privacy review, provider grants/roles and DB isolation; access/retention policy; monitoring/incident response; encrypted backup off-host and proven restore drill.
-- [ ] **Before production:** strong secret and operational rotation, staging smoke tests, migration after confirmed backup, schema-compatible rollout/rollback, readiness, monitored rate limits/logs; domain/Cloudflare/Vercel confirmed.
+- [ ] **Before production:** strong secret and operational rotation, staging smoke tests, migration after confirmed backup, schema-compatible rollout/rollback, readiness, monitored rate limits/logs; domain/Cloudflare Pages confirmed.
 - [ ] **Before RFID kiosk:** supported hardware/OS, dependencies/pins/card tested, secrets in restricted file, loopback/network/firewall reviewed; assess clonable card without calling it MFA.
 - [ ] **Future:** shared session for multiple instances, permission/unit granularity, password recovery, and roadmap accessibility improvements.
 

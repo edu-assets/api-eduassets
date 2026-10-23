@@ -95,7 +95,7 @@ Guest responses use endpoint-specific server-side allowlists; responsible-party 
 - a direct PostgreSQL URL when the provider requires one (`DIRECT_URL`, otherwise the Prisma configuration falls back to `DATABASE_URL`); and
 - physical RFID hardware plus the Linux/Python dependencies only if RFID is explicitly enabled.
 
-Vercel and Docker/Nginx are selected repository-side deployment templates, not configured services. No Oracle VM, DNS, TLS certificate, Cloudflare policy, hosted database, provider-side RLS or public deployment has been verified.
+Cloudflare Pages and Docker/Nginx are selected repository-side deployment templates, not configured services. No Oracle VM, DNS, TLS certificate, Cloudflare policy, hosted database, provider-side RLS or public deployment has been verified.
 
 ## Install and run locally
 
@@ -301,7 +301,7 @@ The frontend follows a feature-first, layered structure. `core` contains infrast
 - Access levels are Administrator and Editor; there is no finer-grained per-panel role system.
 - Password recovery is not implemented. Password change is available only to an authenticated user.
 - The return modal sends and persists the selected offset-aware timestamp; old clients may omit it and use server time.
-- Remaining manual validation includes CI-hosted/PostgreSQL/Docker execution, target-hardware behavior, Nginx/Cloudflare proxy policy, TLS/Vercel configuration, backup/restore, accessibility and browser flows. Templates do not make these verified guarantees.
+- Remaining manual validation includes CI-hosted/PostgreSQL/Docker execution, target-hardware behavior, Nginx/Cloudflare proxy policy, TLS/Cloudflare Pages configuration, backup/restore, accessibility and browser flows. Templates do not make these verified guarantees.
 
 ## Roadmap
 
@@ -313,4 +313,4 @@ The project is released under the MIT license. See the repository license file f
 
 ## Deployment and operations
 
-The selected topology, Docker targets, Vercel build variables, Nginx trust boundary, TLS, firewall, backup/restore, monitoring, release and rollback steps are documented in the [English deployment guide](frontend/public/docs/DEPLOYMENT.md) and [Portuguese guide](frontend/public/docs/GUIA_IMPLANTACAO.md). These are templates requiring operator verification; they do not perform a deployment.
+The selected topology, Docker targets, Cloudflare Pages build variables, Nginx trust boundary, TLS, firewall, backup/restore, monitoring, release and rollback steps are documented in the [English deployment guide](frontend/public/docs/DEPLOYMENT.md) and [Portuguese guide](frontend/public/docs/GUIA_IMPLANTACAO.md). These are templates requiring operator verification; they do not perform a deployment.

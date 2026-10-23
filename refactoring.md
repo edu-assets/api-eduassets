@@ -189,7 +189,7 @@ Run the available dependency, type-check and build validations. Fix genuine Type
 
 Keep the lockfile reproducible and verify that clean installation works.
 
-Environment templates and bilingual deployment guides now document a static Vercel frontend and a Docker backend behind Nginx/Cloudflare as a proposed topology. No Oracle host, DNS, TLS, Cloudflare policy, Vercel project, hosted DB or deployment was verified or changed; keep those states clearly labelled as planned until externally verified.
+Environment templates and bilingual deployment guides now document a static Cloudflare Pages frontend and a Docker backend behind Nginx/Cloudflare as a proposed topology. No Oracle host, DNS, TLS, Cloudflare policy, Cloudflare Pages project, hosted DB or deployment was verified or changed; keep those states clearly labelled as planned until externally verified.
 
 No production hostname is authorized or verified by this repository. The operator must choose and verify the DNS names, TLS certificates, and provider configuration before replacing the placeholders in deployment templates. The separate Astro landing-page project is outside the scope of this backend refactoring.
 

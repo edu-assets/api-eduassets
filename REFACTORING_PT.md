@@ -189,7 +189,7 @@ Execute as validações disponíveis de dependências, verificação de tipos e 
 
 Mantenha o lockfile reproduzível e verifique se uma instalação limpa funciona.
 
-Os modelos de ambiente e os guias bilíngues de implantação documentam agora um frontend estático no Vercel e um backend Docker atrás do Nginx/Cloudflare como topologia proposta. Nenhum host Oracle, DNS, TLS, política do Cloudflare, projeto Vercel, banco de dados hospedado ou implantação foi verificado ou alterado; mantenha esses estados claramente identificados como planejados até que sejam verificados externamente.
+Os modelos de ambiente e os guias bilíngues de implantação documentam agora um frontend estático no Cloudflare Pages e um backend Docker atrás do Nginx/Cloudflare como topologia proposta. Nenhum host Oracle, DNS, TLS, política do Cloudflare, projeto Cloudflare Pages, banco de dados hospedado ou implantação foi verificado ou alterado; mantenha esses estados claramente identificados como planejados até que sejam verificados externamente.
 
 Este repositório não autoriza nem verifica um hostname de produção. O operador deve escolher e verificar os nomes DNS, certificados TLS e configuração do provedor antes de substituir os placeholders dos templates de implantação. O projeto separado da página de apresentação em Astro está fora do escopo desta refatoração do backend.
 

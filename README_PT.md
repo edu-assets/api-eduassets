@@ -95,7 +95,7 @@ Respostas públicas anônimas e minimizadas estão limitadas, por DTOs allowlist
 - uma URL PostgreSQL direta quando exigida pelo provedor (`DIRECT_URL`; caso contrário, a configuração Prisma usa `DATABASE_URL` como fallback); e
 - hardware RFID físico e dependências Linux/Python somente se o RFID for explicitamente habilitado.
 
-Vercel e Docker/Nginx são templates de implantação selecionados no repositório, não serviços configurados. Nenhuma VM Oracle, DNS, certificado TLS, política Cloudflare, banco hospedado, RLS no provedor ou implantação pública foi verificada.
+Cloudflare Pages e Docker/Nginx são templates de implantação selecionados no repositório, não serviços configurados. Nenhuma VM Oracle, DNS, certificado TLS, política Cloudflare, banco hospedado, RLS no provedor ou implantação pública foi verificada.
 
 ## Instalar e executar localmente
 
@@ -301,7 +301,7 @@ O frontend segue uma estrutura em camadas, organizada por funcionalidade. `core`
 - Os níveis de acesso são Administrador e Editor; não há sistema de funções mais granulares por painel.
 - A recuperação de senha não está implementada. A alteração de senha está disponível somente para um usuário autenticado.
 - O modal de devolução envia e persiste o timestamp selecionado com offset; clientes antigos podem omiti-lo e usar o horário do servidor.
-- A validação manual restante inclui execução em CI/PostgreSQL/Docker, comportamento no hardware de destino, política de proxy Nginx/Cloudflare, configuração TLS/Vercel, backup/restauração, acessibilidade e fluxos nos navegadores. Templates não constituem garantias verificadas.
+- A validação manual restante inclui execução em CI/PostgreSQL/Docker, comportamento no hardware de destino, política de proxy Nginx/Cloudflare, configuração TLS/Cloudflare Pages, backup/restauração, acessibilidade e fluxos nos navegadores. Templates não constituem garantias verificadas.
 
 ## Roadmap
 
@@ -313,4 +313,4 @@ O projeto é distribuído sob a licença MIT. Consulte o arquivo de licença do 
 
 ## Implantação e operações
 
-A topologia selecionada, alvos Docker, variáveis de build Vercel, fronteira de confiança Nginx, TLS, firewall, backup/restauração, monitoramento, release e procedimentos de rollback estão documentados no [guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) e no [guia em português](frontend/public/docs/GUIA_IMPLANTACAO.md). São templates que exigem verificação do operador; não realizam uma implantação.
+A topologia selecionada, alvos Docker, variáveis de build do Cloudflare Pages, fronteira de confiança Nginx, TLS, firewall, backup/restauração, monitoramento, release e procedimentos de rollback estão documentados no [guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) e no [guia em português](frontend/public/docs/GUIA_IMPLANTACAO.md). São templates que exigem verificação do operador; não realizam uma implantação.
