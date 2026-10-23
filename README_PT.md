@@ -6,7 +6,7 @@
 
 [README raiz em inglês](README.md) · [Documentação em inglês](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [Guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação em português](frontend/public/docs/GUIA_IMPLANTACAO.md)
 
-> **Status: Beta.** O checkout contém um frontend Vite/TypeScript e um backend Node/Express/TypeScript funcionais, autenticação, modo convidado, operações de empréstimo/devolução, controle de ocorrências, exportações e uma integração RFID opcional. Nesta execução, backend (30/30 testes), frontend (36/36 testes), typecheck, builds e `prisma validate` passaram; migrations, seed, PostgreSQL de integração, Docker/Compose, Nginx e CI hospedado não foram executados neste sandbox. Não há um deployment público operacional documentado neste repositório; os arquivos de implantação são templates e nenhum deployment foi realizado. RFID está desligado na implantação pública.
+> **Status: Beta.** O checkout contém um frontend Vite/TypeScript e um backend Node/Express/TypeScript funcionais, autenticação, modo convidado, operações de empréstimo/devolução, controle de ocorrências, exportações e uma integração RFID opcional. Nesta execução, backend (30/30 testes), frontend (36/36 testes), typecheck, builds e `prisma validate` passaram; migrations, seed, PostgreSQL de integração e smoke de produção foram executados no CI hospedado `39875293195`, que passou nos jobs `verify` e `production-smoke`; Docker/Compose e Nginx não foram executados localmente neste sandbox. Não há um deployment público operacional documentado neste repositório; os arquivos de implantação são templates e nenhum deployment foi realizado. RFID está desligado na implantação pública.
 
 ## Visão geral
 
@@ -305,7 +305,7 @@ O frontend segue uma estrutura em camadas, organizada por funcionalidade. `core`
 
 ## Roadmap
 
-Os caminhos de código concluídos incluem frontend TypeScript, controle de acesso JWT, DTOs de convidado allowlisted, temas Claro/Escuro/Sistema, operações transacionais de estoque, exportações, limitação de taxa, timeout de inatividade do administrador, data de devolução selecionada e RFID opcional. A integração PostgreSQL e a CI hospedada estão preparadas, mas não foram executadas; primeiro deployment, verificação manual de acessibilidade/hardware/proxy e migração para React continuam no roadmap.
+Os caminhos de código concluídos incluem frontend TypeScript, controle de acesso JWT, DTOs de convidado allowlisted, temas Claro/Escuro/Sistema, operações transacionais de estoque, exportações, limitação de taxa, timeout de inatividade do administrador, data de devolução selecionada e RFID opcional. A integração PostgreSQL e a CI hospedada passaram no run `39875293195`; primeiro deployment, verificação manual de acessibilidade/hardware/proxy e migração para React continuam no roadmap.
 
 ## Licença
 
