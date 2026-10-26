@@ -14,6 +14,11 @@ export const rfidScanSchema = z.object({
   token: z.string().trim().regex(/^[0-9a-f]{32}$/i, 'Token de cartão inválido.'),
 });
 
+export const rfidSessionSchema = z.object({
+  code: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Código de sessão RFID inválido.'),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type AlterarSenhaInput = z.infer<typeof alterarSenhaSchema>;
 export type RfidScanInput = z.infer<typeof rfidScanSchema>;
+export type RfidSessionInput = z.infer<typeof rfidSessionSchema>;

@@ -23,6 +23,7 @@ const allowedOrigins = runtimeConfig.corsOrigins;
 app.use(
   cors({
     origin: isLocalDevelopment ? true : allowedOrigins,
+    credentials: true,
   })
 );
 

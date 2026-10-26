@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
+import { createRfidLoginCode } from './rfidLoginCode.js';
 
 interface RfidLoginEvent {
   token: string;
@@ -12,6 +13,7 @@ interface RfidLoginEvent {
 }
 
 let wss: WebSocketServer | null = null;
+const cookieModeClients = new WeakMap<WebSocket, boolean>();
 
 function ehLoopback(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false;
@@ -22,7 +24,15 @@ export function initRfidBridge(server: Server): void {
   wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (req, socket, head) => {
-    if (req.url !== '/ws/rfid') {
+    let cookieMode = false;
+    try {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      if (url.pathname !== '/ws/rfid') {
+        socket.destroy();
+        return;
+      }
+      cookieMode = url.searchParams.get('auth') === 'cookie';
+    } catch {
       socket.destroy();
       return;
     }
@@ -34,6 +44,7 @@ export function initRfidBridge(server: Server): void {
     }
 
     wss!.handleUpgrade(req, socket, head, (ws) => {
+      cookieModeClients.set(ws, cookieMode);
       wss!.emit('connection', ws, req);
     });
   });
@@ -45,8 +56,12 @@ export function initRfidBridge(server: Server): void {
 
 export function publicarLoginRfid(evento: RfidLoginEvent): void {
   if (!wss) return;
-  const payload = JSON.stringify(evento);
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) client.send(payload);
+    if (client.readyState !== WebSocket.OPEN) return;
+    if (cookieModeClients.get(client)) {
+      client.send(JSON.stringify({ code: createRfidLoginCode(evento.token) }));
+    } else {
+      client.send(JSON.stringify(evento));
+    }
   });
 }

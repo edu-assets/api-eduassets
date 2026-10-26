@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifyToken, AppJwtPayload } from '../lib/jwt.js';
+import { clearSessionCookie, getSessionCookieToken } from '../lib/sessionCookie.js';
+import { isTrustedOrigin } from './csrf.js';
 import { prisma } from '../lib/prisma.js';
 import {
   registrarAtividadeAdmin,
@@ -16,16 +18,27 @@ declare global {
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
+  const bearerToken = header?.startsWith('Bearer ') ? header.slice(7) : null;
+  const cookieToken = getSessionCookieToken(req);
+  const usingCookie = cookieToken !== null;
+  const token = cookieToken ?? bearerToken;
 
-  if (!header?.startsWith('Bearer ')) {
+  if (!token) {
     res.status(401).json({ erro: 'backend.auth.autenticacao_necessaria' });
+    return;
+  }
+
+  const isMutatingMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+  if (usingCookie && isMutatingMethod && !isTrustedOrigin(req.get('origin'))) {
+    res.status(403).json({ erro: 'backend.auth.origem_nao_permitida' });
     return;
   }
 
   let payload: AppJwtPayload;
   try {
-    payload = verifyToken(header.slice(7));
+    payload = verifyToken(token);
   } catch {
+    if (usingCookie) clearSessionCookie(req, res);
     res.status(401).json({ erro: 'backend.auth.token_invalido' });
     return;
   }
@@ -37,11 +50,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   });
 
   if (!usuario) {
+    if (usingCookie) clearSessionCookie(req, res);
     res.status(401).json({ erro: 'backend.auth.usuario_nao_existe' });
     return;
   }
 
   if (payload.sessionVersion !== usuario.sessionVersion) {
+    if (usingCookie) clearSessionCookie(req, res);
     res.status(401).json({ erro: 'backend.auth.token_invalido' });
     return;
   }
@@ -49,6 +64,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   // Se o nível atual no banco é ADMINISTRADOR, aplica o timeout de 30 minutos de inatividade
   if (usuario.nivelAcesso === 'ADMINISTRADOR') {
     if (sessaoAdminExpirada(payload.jti, payload.iat)) {
+      if (usingCookie) clearSessionCookie(req, res);
       res.status(401).json({ erro: 'backend.auth.sessao_expirada', sessaoExpirada: true });
       return;
     }
@@ -80,7 +96,7 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
 
 /** Authenticate requests that supply a bearer token while retaining Guest Mode for anonymous reads. */
 export async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (!req.headers.authorization) {
+  if (!req.headers.authorization && !getSessionCookieToken(req)) {
     next();
     return;
   }
