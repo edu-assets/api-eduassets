@@ -4,9 +4,9 @@
   <img src="frontend/public/assets/img/eduAssets_banner.png" alt="eduAssets banner" width="100%">
 </div>
 
-[Português](README_PT.md) · [English documentation](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [Deployment guide](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação](frontend/public/docs/GUIA_IMPLANTACAO.md)
+[Português](README_PT.md) · [English documentation](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [API reference](frontend/public/docs/API_REFERENCE.md) · [Referência da API](frontend/public/docs/REFERENCIA_API.md) · [Development guide](frontend/public/docs/DEVELOPMENT.md) · [Guia de desenvolvimento](frontend/public/docs/DESENVOLVIMENTO.md) · [Deployment guide](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação](frontend/public/docs/GUIA_IMPLANTACAO.md)
 
-> **Status: Beta.** The current checkout contains a TypeScript frontend and backend, authentication, Guest mode, loan/return workflows, occurrence management, exports and optional RFID integration. No operational public deployment is documented in this repository; the steps below describe local development and technical preparation, not infrastructure that has already been published.
+> **Status: Beta.** This checkout contains a TypeScript frontend and backend, authentication, Guest Mode, loan/return workflows, occurrence management, exports and optional RFID. The changelog records an operator-reported Cloudflare Pages/Oracle deployment on October 23, 2026; this documentation pass did not re-verify the current remote infrastructure. The repository also records hosted CI run `39875293195` passing `verify` and `production-smoke` for commit `a8cd39b`; this is validation evidence, not automatic deployment.
 
 ## Overview
 
@@ -74,7 +74,7 @@ Optional RFID bridge (local kiosk) ── backend /auth/rfid (not exposed by the
 - **Editor:** authenticated operational actions such as loans, returns and creating/editing occurrences, subject to the route permissions.
 - **Administrator:** administrative CRUD, account/password management and RFID-token provisioning in addition to operational actions.
 
-The backend is the security boundary: mutating routes use authentication/administrator middleware and JWTs in `Authorization: Bearer <token>`. Guest endpoints use minimized, server-side allowlisted projections; frontend guards are for usability only. Logout and password changes update a PostgreSQL-backed per-user `sessionVersion`, invalidating older JWTs across instances; password change returns a replacement JWT for the current browser. Administrator inactivity still uses process-local state and is consistent only on a single backend instance; editor sessions do not use that idle timeout. Password recovery is not implemented; an authenticated user can change their own password through `PATCH /auth/senha`.
+The backend is the security boundary: the current browser flow negotiates an `HttpOnly`, `SameSite=Lax` session cookie through `/auth/session-capabilities`; on production HTTPS the cookie is `Secure` and uses the `__Host-` prefix. Cookie-authenticated mutations require a trusted `Origin`. `Authorization: Bearer <token>` remains available for older clients and fallback mode; avoid JavaScript-readable token storage when cookie sessions are supported. Guest endpoints use minimized, server-side allowlisted projections; frontend guards are for usability only. Logout and password changes update a PostgreSQL-backed per-user `sessionVersion`, invalidating older sessions across instances. Administrator inactivity still uses process-local state and is consistent only on a single backend instance; editor sessions do not use that idle timeout. Password recovery is not implemented; an authenticated user can change their own password through `PATCH /auth/senha`. See the [API reference](frontend/public/docs/API_REFERENCE.md) for the route and session contract.
 
 ## Backend API surface
 
@@ -85,6 +85,8 @@ The application router includes:
 - `POST /auth/rfid` for the optional local-kiosk RFID flow; the public Nginx template returns 404 for this endpoint and `/ws/rfid`;
 - CRUD routes for `/categorias`, `/equipamentos`, `/responsaveis`, `/usuarios`, `/emprestimos` and `/ocorrencias`; and
 - administrator-only RFID-token provisioning/revocation under `/usuarios/:id/rfid-token`.
+
+The detailed route/method/permission table is maintained in the [API reference](frontend/public/docs/API_REFERENCE.md).
 
 Guest responses use endpoint-specific server-side allowlists; responsible-party and user listings require authentication. Write authorization is enforced in the backend. Public demo data must be synthetic and isolated from operational data. The Prisma schema contains `Categoria`, `Equipamento`, `Responsavel`, `Usuario`, `Emprestimo`, `ItemEmprestimo` and `Ocorrencia`, with enums for access level, loan status, occurrence type and occurrence status.
 
@@ -293,7 +295,7 @@ The frontend follows a feature-first, layered structure. `core` contains infrast
 
 ## Current limitations and release notes
 
-- No public deployment, production database operation/migration, secret rotation or hosting configuration was performed. Repository deployment templates are preparation artifacts only. Planned domains are not proof of availability.
+- The current documentation pass did not verify public DNS, TLS, Cloudflare settings, Oracle VM, production database, secret rotation, or live service availability. The changelog/roadmap preserve the operator-reported October 23 Beta deployment as historical evidence; it is not a live health check. Repository deployment files are templates for controlled operator use.
 - Access control for application requests is implemented in the backend. Provider-side grants/PostgREST are not part of the app's request path; if exposed by a selected provider, review them separately and block unintended anonymous access.
 - Production requires explicit `CORS_ORIGIN` and `TRUST_PROXY`; validate the actual proxy and firewall topology before deployment.
 - RFID is an opt-in hardware integration, not a fallback login. It needs a compatible reader, Linux/Python dependencies, a strong shared secret, loopback reachability and an explicit firewall/proxy policy.
@@ -301,11 +303,11 @@ The frontend follows a feature-first, layered structure. `core` contains infrast
 - Access levels are Administrator and Editor; there is no finer-grained per-panel role system.
 - Password recovery is not implemented. Password change is available only to an authenticated user.
 - The return modal sends and persists the selected offset-aware timestamp; old clients may omit it and use server time.
-- Remaining manual validation includes CI-hosted/PostgreSQL/Docker execution, target-hardware behavior, Nginx/Cloudflare proxy policy, TLS/Cloudflare Pages configuration, backup/restore, accessibility and browser flows. Templates do not make these verified guarantees.
+- The changelog records hosted CI run `39875293195` passing `verify` and `production-smoke` for commit `a8cd39b`; this does not validate the current checkout or deploy it. Remaining manual validation includes target hardware, current Nginx/Cloudflare proxy/TLS state, backup/restore, accessibility and browser flows.
 
 ## Roadmap
 
-Completed code paths include the TypeScript frontend, JWT access control, allowlisted Guest DTOs, Light/Dark/System themes, transactional stock operations, exports, rate limiting, admin idle timeout, selected return date and optional RFID. PostgreSQL integration and hosted CI are prepared but unexecuted; first deployment, manual accessibility/hardware/proxy verification and React migration remain roadmap items.
+Completed code paths include the TypeScript frontend, cookie-first session authentication (with legacy Bearer fallback), allowlisted Guest DTOs, Light/Dark/System themes, transactional stock operations, exports, rate limiting, admin idle timeout, selected return date and optional RFID. Hosted CI run `39875293195` is recorded as passing `verify` and `production-smoke` for `a8cd39b`; CI does not deploy. Current infrastructure/backup verification, manual accessibility/hardware/proxy checks and React migration remain roadmap items.
 
 ## License
 
@@ -314,3 +316,5 @@ The project is released under the MIT license. See the repository license file f
 ## Deployment and operations
 
 The selected topology, Docker targets, Cloudflare Pages build variables, Nginx trust boundary, TLS, firewall, backup/restore, monitoring, release and rollback steps are documented in the [English deployment guide](frontend/public/docs/DEPLOYMENT.md) and [Portuguese guide](frontend/public/docs/GUIA_IMPLANTACAO.md). These are templates requiring operator verification; they do not perform a deployment.
+
+GitHub Actions validates code and smoke-tests disposable services; it does not deploy the frontend or restart the API. For operational triage and recovery limits, see [Operations and Recovery](frontend/public/docs/OPERATIONS_AND_RECOVERY.md) and [Operação e Recuperação](frontend/public/docs/OPERACAO_E_RECUPERACAO.md).

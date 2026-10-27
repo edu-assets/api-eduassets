@@ -4,9 +4,9 @@
   <img src="frontend/public/assets/img/eduAssets_banner.png" alt="Banner eduAssets" width="100%">
 </div>
 
-[README raiz em inglês](README.md) · [Documentação em inglês](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [Guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação em português](frontend/public/docs/GUIA_IMPLANTACAO.md)
+[README raiz em inglês](README.md) · [Documentação em inglês](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [API reference](frontend/public/docs/API_REFERENCE.md) · [Referência da API](frontend/public/docs/REFERENCIA_API.md) · [Development guide](frontend/public/docs/DEVELOPMENT.md) · [Guia de desenvolvimento](frontend/public/docs/DESENVOLVIMENTO.md) · [Guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação em português](frontend/public/docs/GUIA_IMPLANTACAO.md)
 
-> **Status: Beta.** O checkout contém um frontend Vite/TypeScript e um backend Node/Express/TypeScript funcionais, autenticação, modo convidado, operações de empréstimo/devolução, controle de ocorrências, exportações e uma integração RFID opcional. Nesta execução, backend (30/30 testes), frontend (36/36 testes), typecheck, builds e `prisma validate` passaram; migrations, seed, PostgreSQL de integração e smoke de produção foram executados no CI hospedado `39875293195`, que passou nos jobs `verify` e `production-smoke`; Docker/Compose e Nginx não foram executados localmente neste sandbox. Não há um deployment público operacional documentado neste repositório; os arquivos de implantação são templates e nenhum deployment foi realizado. RFID está desligado na implantação pública.
+> **Status: Beta.** O checkout contém frontend Vite/TypeScript e backend Node/Express/TypeScript, login por sessão cookie `HttpOnly` quando suportado, modo convidado, empréstimos/devoluções, ocorrências, exportações e integração RFID opcional. O changelog registra implantação Cloudflare Pages/Oracle reportada pelo operador em 23/10/2026; esta revisão documental não revalidou a infraestrutura remota atual. O repositório registra o CI hospedado `39875293195` como aprovado em `verify` e `production-smoke` para o commit `a8cd39b`; isso é evidência de validação, não implantação automática.
 
 ## Visão geral
 
@@ -74,7 +74,7 @@ Bridge RFID opcional (quiosque local) ── backend /auth/rfid (não exposto pe
 - **Editor:** ações operacionais autenticadas, como empréstimos, devoluções e criação/edição de ocorrências, sujeitas às permissões das rotas.
 - **Administrador:** CRUD administrativo, gerenciamento de contas/senhas e provisionamento de tokens RFID, além das ações operacionais.
 
-O backend é a fronteira de segurança: rotas de alteração usam autenticação/middleware de administrador e JWTs em `Authorization: Bearer <token>`. Os endpoints de convidado usam projeções minimizadas, permitidas por lista de inclusão no servidor; as proteções do frontend servem apenas à usabilidade. Logout e troca de senha atualizam `sessionVersion` por usuário, persistida no PostgreSQL, invalidando JWTs anteriores entre instâncias; a troca de senha devolve token substituto para o navegador atual. O timeout de inatividade de administradores ainda usa estado local ao processo e só é consistente em uma instância; sessões de editor não usam esse timeout. A recuperação de senha não está implementada; um usuário autenticado pode alterar a própria senha por `PATCH /auth/senha`.
+O backend é a fronteira de segurança: o navegador negocia sessão por cookie `HttpOnly` e `SameSite=Lax` através de `/auth/session-capabilities`; em HTTPS de produção o cookie usa `Secure` e o prefixo `__Host-`. Alterações autenticadas por cookie exigem `Origin` confiável. `Authorization: Bearer <token>` permanece disponível para clientes antigos e modo de compatibilidade; evite persistir token acessível a JavaScript quando cookies de sessão forem suportados. Os endpoints de convidado usam projeções minimizadas, permitidas por lista de inclusão no servidor; as proteções do frontend servem apenas à usabilidade. Logout e troca de senha atualizam `sessionVersion` por usuário no PostgreSQL, invalidando sessões anteriores entre instâncias. O timeout de inatividade de administradores ainda usa estado local ao processo e só é consistente em uma instância; sessões de editor não usam esse timeout. A recuperação de senha não está implementada; um usuário autenticado pode alterar a própria senha por `PATCH /auth/senha`. Consulte a [Referência da API](frontend/public/docs/REFERENCIA_API.md) para rotas, permissões e detalhes da sessão.
 
 ## Superfície da API do backend
 
@@ -85,6 +85,8 @@ O roteador da aplicação inclui:
 - `POST /auth/rfid` para o fluxo RFID opcional do quiosque local; o template Nginx público retorna 404 para esse endpoint e para `/ws/rfid`;
 - rotas CRUD para `/categorias`, `/equipamentos`, `/responsaveis`, `/usuarios`, `/emprestimos` e `/ocorrencias`; e
 - provisionamento/revogação de tokens RFID, somente para administradores, em `/usuarios/:id/rfid-token`.
+
+A tabela detalhada de métodos, rotas e permissões está na [Referência da API](frontend/public/docs/REFERENCIA_API.md).
 
 Respostas públicas anônimas e minimizadas estão limitadas, por DTOs allowlisted específicos no servidor, às categorias, equipamentos, empréstimos e ocorrências; consultas de responsáveis e usuários exigem autenticação. A autorização de escrita é aplicada no backend. Os dados de demonstração públicos devem ser sintéticos e isolados dos dados operacionais. O schema Prisma contém `Categoria`, `Equipamento`, `Responsavel`, `Usuario`, `Emprestimo`, `ItemEmprestimo` e `Ocorrencia`, com enums para nível de acesso, status de empréstimo, tipo de ocorrência e status de ocorrência.
 
@@ -293,7 +295,7 @@ O frontend segue uma estrutura em camadas, organizada por funcionalidade. `core`
 
 ## Limitações atuais e notas de versão
 
-- Nenhum deployment público, operação/migration de banco de produção, rotação de segredos ou configuração de hospedagem foi realizado. Os templates de implantação do repositório são apenas artefatos de preparação. Domínios planejados não comprovam disponibilidade.
+- Nesta revisão não foram verificados DNS público, TLS, configuração Cloudflare, VM Oracle, banco de produção, rotação de segredos ou disponibilidade dos serviços. O changelog/roadmap mantêm como histórico o deployment Beta reportado em 23/10; isso não é health check ao vivo. Os arquivos de implantação são templates para uso controlado pelo operador.
 - O controle de acesso às requisições da aplicação é implementado no backend. Grants/PostgREST do provedor não fazem parte do caminho de requisições do app; se forem expostos por um provedor selecionado, revise-os separadamente e bloqueie acesso anônimo não intencional.
 - Produção exige `CORS_ORIGIN` e `TRUST_PROXY` explícitos; valide a topologia real de proxy e firewall antes da implantação.
 - RFID é uma integração de hardware opt-in, não um método alternativo de login. Exige leitor compatível, dependências Linux/Python, segredo compartilhado forte, conectividade loopback e política explícita de firewall/proxy.
@@ -301,11 +303,11 @@ O frontend segue uma estrutura em camadas, organizada por funcionalidade. `core`
 - Os níveis de acesso são Administrador e Editor; não há sistema de funções mais granulares por painel.
 - A recuperação de senha não está implementada. A alteração de senha está disponível somente para um usuário autenticado.
 - O modal de devolução envia e persiste o timestamp selecionado com offset; clientes antigos podem omiti-lo e usar o horário do servidor.
-- A validação manual restante inclui execução em CI/PostgreSQL/Docker, comportamento no hardware de destino, política de proxy Nginx/Cloudflare, configuração TLS/Cloudflare Pages, backup/restauração, acessibilidade e fluxos nos navegadores. Templates não constituem garantias verificadas.
+- O changelog registra o CI hospedado `39875293195` aprovado em `verify` e `production-smoke` para o commit `a8cd39b`; isso não valida o checkout atual nem o implanta. Permanecem verificações manuais de hardware-alvo, estado atual de proxy/TLS Nginx/Cloudflare, backup/restauração, acessibilidade e fluxos nos navegadores.
 
 ## Roadmap
 
-Os caminhos de código concluídos incluem frontend TypeScript, controle de acesso JWT, DTOs de convidado allowlisted, temas Claro/Escuro/Sistema, operações transacionais de estoque, exportações, limitação de taxa, timeout de inatividade do administrador, data de devolução selecionada e RFID opcional. A integração PostgreSQL e a CI hospedada passaram no run `39875293195`; primeiro deployment, verificação manual de acessibilidade/hardware/proxy e migração para React continuam no roadmap.
+Os caminhos de código concluídos incluem frontend TypeScript, sessão cookie-first (com fallback Bearer legado), DTOs de convidado allowlisted, temas Claro/Escuro/Sistema, operações transacionais, exportações, timeout do administrador e RFID opcional. O CI hospedado `39875293195` está registrado como aprovado em `verify` e `production-smoke` para `a8cd39b`; CI não faz deployment. Verificação atual de infraestrutura/backup, acessibilidade/hardware/proxy e migração para React continuam no roadmap.
 
 ## Licença
 
@@ -314,3 +316,5 @@ O projeto é distribuído sob a licença MIT. Consulte o arquivo de licença do 
 ## Implantação e operações
 
 A topologia selecionada, alvos Docker, variáveis de build do Cloudflare Pages, fronteira de confiança Nginx, TLS, firewall, backup/restauração, monitoramento, release e procedimentos de rollback estão documentados no [guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) e no [guia em português](frontend/public/docs/GUIA_IMPLANTACAO.md). São templates que exigem verificação do operador; não realizam uma implantação.
+
+O GitHub Actions valida o código e executa smoke tests em serviços descartáveis; não publica o frontend nem reinicia a API. Para triagem operacional e limites de recuperação, consulte [Operação e Recuperação](frontend/public/docs/OPERACAO_E_RECUPERACAO.md) e [Operations and Recovery](frontend/public/docs/OPERATIONS_AND_RECOVERY.md).
