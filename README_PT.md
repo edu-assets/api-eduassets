@@ -1,96 +1,76 @@
-# Backend do eduAssets
+# eduAssets
 
-[README em inglês](README.md) · [Aplicação frontend](https://github.com/edu-assets/app-eduassets)
+<div align="center">
+  <img src="assets/eduAssets_banner.webp" alt="eduAssets — inventário e empréstimos de equipamentos escolares" width="100%">
+</div>
 
-> **Status: Beta.** Este repositório contém a API do eduAssets, a integração com o banco de dados e arquivos de suporte à implantação/operação do backend. A aplicação de navegador é mantida separadamente em [`edu-assets/app-eduassets`](https://github.com/edu-assets/app-eduassets).
+[README em inglês](README.md) · [Frontend](frontend.md) · [Backend](backend.md) · [Repositório de documentação](https://github.com/edu-assets/docs-eduassets)
+
+> **Status: Beta.** O eduAssets é uma aplicação de inventário e empréstimo de equipamentos escolares. Frontend, backend, documentação e portfólio agora têm repositórios separados. Este README apresenta o produto como um todo; os guias detalhados são mantidos no repositório central de documentação.
 
 ## Visão geral
 
-O serviço eduAssets atende fluxos de inventário e empréstimo de equipamentos escolares. A API gerencia autenticação, acesso de convidado somente leitura, equipamentos e categorias, empréstimos e devoluções, ocorrências e integração opcional de login RFID.
+A aplicação oferece empréstimos e devoluções de equipamentos, consultas de estoque/histórico, ocorrências, CRUD administrativo, exportações e login RFID opcional. Os níveis de acesso incluem Convidado somente leitura, Editor e Administrador. O cliente atual usa TypeScript e renderização nativa do DOM; React continua no roadmap, não é uma dependência atual.
 
-A topologia de produção está dividida por serviço:
+## Mapa dos repositórios
+
+| Repositório | Responsabilidade |
+| --- | --- |
+| [`edu-assets/app-eduassets`](https://github.com/edu-assets/app-eduassets) | Aplicação frontend, tela inicial de login, painel Sobre/modal de documentação e build do Cloudflare Pages. |
+| [`edu-assets/eduAssets`](https://github.com/edu-assets/eduAssets) | API backend, integração Prisma/PostgreSQL, bridge RFID opcional e templates de implantação. Este repositório. |
+| [`edu-assets/docs-eduassets`](https://github.com/edu-assets/docs-eduassets) | Documentação canônica bilíngue em Markdown e PDF, compartilhada entre os projetos. |
+| [`edu-assets/site-eduAssets`](https://github.com/edu-assets/site-eduAssets) | Site público do portfólio e visão geral do projeto. |
+
+## Arquitetura de execução
 
 ```text
-Navegador → Cloudflare Pages: app.eduassets.tech
-                            │ requisições HTTPS à API
-                            ▼
-                 Cloudflare → Nginx na VM Oracle
-                            │ proxy pelo loopback
-                            ▼
-                     API Docker: 127.0.0.1:3000
-                            │ PostgreSQL TLS
-                            ▼
-                          Neon
+Navegador ── Cloudflare Pages (app.eduassets.tech)
+   │ chamadas HTTPS à API
+   ▼
+Cloudflare / Nginx ── Oracle Cloud VM
+   │ proxy de loopback
+   ▼
+API Node.js / Express ── PostgreSQL
+
+Leitor/bridge RFID local opcional ── endpoints RFID restritos do backend
 ```
 
-O frontend está em [`app-eduassets`](https://github.com/edu-assets/app-eduassets). Este repositório não contém a aplicação Pages nem sua configuração de build. A API é a fronteira de autorização; controles no frontend são apenas medidas de usabilidade.
+A API é a fronteira de segurança. O navegador negocia cookies de sessão `HttpOnly` e `SameSite=Lax` quando suportados; em HTTPS de produção, os cookies usam `Secure` e o prefixo `__Host-`. Alterações autenticadas por cookie exigem `Origin` confiável. Respostas de Convidado usam allowlists minimizadas no servidor, e as permissões de escrita são aplicadas nas rotas do backend. O fluxo RFID opcional fica desabilitado ou bloqueado na implantação pública por padrão.
 
-## Conteúdo do repositório
+A topologia acima corresponde ao desenho de implantação documentado; esta alteração de repositório não inspeciona, reinicia nem modifica a VM Oracle ou serviços hospedados.
 
-- `backend/` — API Node.js/TypeScript, rotas Express, schema Prisma, testes e migrations;
-- `deploy/` e `docker-compose.production.yml` — templates de implantação de Nginx e contêineres;
-- `docs/` — runbooks operacionais do backend;
-- `rpi/` e `eduStation/` — código opcional de suporte a RFID e dispositivos;
-- `.env.example` e `.env.production.example` — somente templates de variáveis; nunca faça commit de segredos reais.
+## Desenvolvimento local do backend
 
-## Stack e segurança
-
-- Node.js **>=22.12.0**, TypeScript e Express 5;
-- Prisma 6 com PostgreSQL;
-- hashes de senha com bcrypt, sessões baseadas em JWT, validação de requisições, limitação de taxa e cabeçalhos de segurança;
-- cookies de sessão `HttpOnly`, `SameSite=Lax`, `Secure` em HTTPS de produção e restritos ao host; mutações autenticadas por cookie exigem um `Origin` confiável;
-- a autorização é aplicada pelas políticas de rota do backend. Respostas de convidado usam DTOs minimizados e allowlisted; consultas sensíveis e mutações exigem autenticação;
-- endpoints da bridge RFID opcional ficam desativados/bloqueados no deployment público por padrão.
-
-Consulte a [Referência da API](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/REFERENCIA_API.md), o [guia de arquitetura](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/ARQUITETURA.md) e [Operação e recuperação](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/OPERACAO_E_RECUPERACAO.md) para os contratos detalhados. O repositório do frontend também contém a documentação bilíngue do produto e de implantação.
-
-## Requisitos
-
-- Node.js **22.12 ou mais recente** e npm;
-- PostgreSQL para desenvolvimento local e testes;
-- Docker Engine e Docker Compose para a implantação de produção documentada;
-- Linux/Python e hardware RFID compatível somente se a bridge opcional for explicitamente habilitada.
-
-## Desenvolvimento local
-
-Na raiz do repositório:
+Requisitos: Node.js **22.12 ou mais recente**, npm e um banco PostgreSQL para desenvolvimento local.
 
 ```bash
 npm ci --prefix backend
 cp .env.example backend/.env
 ```
 
-No Windows PowerShell, use `Copy-Item .env.example backend/.env`. Edite `backend/.env` com uma URL de banco de desenvolvimento descartável e um `JWT_SECRET` exclusivo, com pelo menos 32 caracteres aleatórios. Não use credenciais de produção nos testes locais e não faça commit desse arquivo. O exemplo configura desenvolvimento local; use os templates e guias de implantação para valores de produção.
-
-Aplique migrations somente ao banco de desenvolvimento correto e inicie a API:
+Defina em `backend/.env` uma `DATABASE_URL` de desenvolvimento descartável e um `JWT_SECRET` exclusivo com pelo menos 32 caracteres aleatórios. Nunca use credenciais de produção em testes locais nem faça commit de arquivos de ambiente. Aplique migrations somente ao banco de desenvolvimento pretendido e execute:
 
 ```bash
 npm --prefix backend run migrate:deploy
 npm run dev
 ```
 
-Os scripts de raiz `npm run dev` e `npm run build` agora executam somente o backend. Em desenvolvimento, a API escuta por padrão em `127.0.0.1:3000`. O frontend é executado separadamente a partir do repositório `app-eduassets`; o proxy de desenvolvimento Vite desse repositório aponta para essa porta.
-
-## Verificações do backend
+Verificações úteis:
 
 ```bash
-npm --prefix backend test
-npm --prefix backend run test:integration
+npm test
 npm run build
+npm run test:integration  # exige banco PostgreSQL isolado para testes
 ```
 
-Os testes de integração exigem o PostgreSQL descartável configurado. O GitHub Actions verifica testes/build do backend e templates de implantação; não faz deploy no Cloudflare nem na VM Oracle.
+`npm run dev` e `npm run build` na raiz deste repositório atuam somente no backend. A configuração e os comandos do frontend estão em [frontend.md](frontend.md); os detalhes do backend, em [backend.md](backend.md).
 
-## Operação de produção
+## Documentação e implantação
 
-A API é executada como serviço Docker Compose na VM Oracle Cloud, atrás do Nginx em `api.eduassets.tech`. O contêiner publica a porta somente no loopback do host; não exponha publicamente a porta `3000` nem o PostgreSQL.
+Os guias bilíngues canônicos ficam em [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets). O modal Sobre mantém seu catálogo e renderizador no repositório do app e pode carregar o Markdown central quando a origem pública estiver configurada; cópias incluídas no frontend permanecem como fallback até validar a leitura remota em produção. Os procedimentos de implantação do backend, operação da VM, recuperação, API e arquitetura são referenciados pelo repositório de documentação.
 
-Após uma alteração de código/configuração do backend, atualize e recrie o serviço da API pelo procedimento documentado:
+O GitHub Actions valida o código e os templates de implantação; não publica o frontend, não reinicia a API e não reinicia a VM. Alterações somente de documentação ou frontend não exigem reinicialização da VM Oracle. Releases do backend seguem o procedimento documentado de atualização da API e normalmente não exigem reboot completo da VM.
 
-```bash
-cd /opt/eduassets
-git pull --ff-only origin main
-docker compose --env-file .env.production -f docker-compose.production.yml up -d --build --force-recreate api
-```
+## Licença
 
-Um reboot completo da VM não é necessário para alterações comuns da aplicação. Migrations de banco são operações separadas e explícitas; siga o guia de implantação e confirme os backups antes de aplicá-las. Consulte o [guia de implantação](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/GUIA_IMPLANTACAO.md), o [guia em inglês](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/DEPLOYMENT.md) e o runbook local de [redefinição de senha](docs/ADMIN_PASSWORD_RESET_RUNBOOK.md).
+MIT. Consulte [LICENSE](LICENSE) para o texto oficial.
