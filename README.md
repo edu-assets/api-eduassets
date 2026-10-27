@@ -1,320 +1,96 @@
-# eduAssets
+# eduAssets Backend
 
-<div align="center">
-  <img src="frontend/public/assets/img/eduAssets_banner.png" alt="eduAssets banner" width="100%">
-</div>
+[Português](README_PT.md) · [Frontend application](https://github.com/edu-assets/app-eduassets)
 
-[Português](README_PT.md) · [English documentation](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [API reference](frontend/public/docs/API_REFERENCE.md) · [Referência da API](frontend/public/docs/REFERENCIA_API.md) · [Development guide](frontend/public/docs/DEVELOPMENT.md) · [Guia de desenvolvimento](frontend/public/docs/DESENVOLVIMENTO.md) · [Deployment guide](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação](frontend/public/docs/GUIA_IMPLANTACAO.md)
-
-> **Status: Beta.** This checkout contains a TypeScript frontend and backend, authentication, Guest Mode, loan/return workflows, occurrence management, exports and optional RFID. The changelog records an operator-reported Cloudflare Pages/Oracle deployment on October 23, 2026; this documentation pass did not re-verify the current remote infrastructure. The repository also records hosted CI run `39875293195` passing `verify` and `production-smoke` for commit `a8cd39b`; this is validation evidence, not automatic deployment.
+> **Status: Beta.** This repository contains the eduAssets API, database integration, and backend deployment/support files. The browser application is maintained separately in [`edu-assets/app-eduassets`](https://github.com/edu-assets/app-eduassets).
 
 ## Overview
 
-**eduAssets** is a school-equipment loan and inventory-management application. It is designed for frequent operational workflows used by administrators and editors rather than for per-unit serial-number tracking.
+The eduAssets service supports equipment inventory and loan workflows for schools. Its API handles authentication, guest read-only access, equipment and category management, loans and returns, occurrences, exports, and optional RFID login integration.
 
-The application covers:
-
-- equipment-loan registration and returns;
-- stock and loan-history views with search/filter;
-- equipment occurrences (observation, maintenance and broken items);
-- CRUD administration for categories, equipment, responsible people and users;
-- CSV, Excel and PDF exports; and
-- authenticated sessions, administrator/editor permissions, guest read-only access and optional physical-card login through RFID.
-
-The interface also includes persisted Light / Dark / System theme selection. The current frontend is TypeScript plus native DOM rendering; React is a future roadmap item, not a current dependency.
-
-## Runtime topology
-
-In the default local setup, the processes fit this arrangement:
+The production topology is split by service:
 
 ```text
-Browser ── http://localhost:5173 ── Vite dev server
-                                      │ proxy (/auth, /usuarios, /ws, ...)
-                                      ▼
-                                 API :3000 ── PostgreSQL
-
-Optional RFID bridge (local kiosk) ── backend /auth/rfid (not exposed by the public proxy)
-                     └─ local provisioner http://127.0.0.1:3001/provision
+Browser → Cloudflare Pages: app.eduassets.tech
+                         │ HTTPS API requests
+                         ▼
+              Cloudflare → Nginx on Oracle VM
+                         │ loopback proxy
+                         ▼
+                  Docker API: 127.0.0.1:3000
+                         │ PostgreSQL TLS
+                         ▼
+                       Neon
 ```
 
-- The backend listens on **port 3000 by default**. `PORT` takes precedence over `BACKEND_PORT`; each supplied value is validated and an invalid value fails startup instead of silently falling back.
-- `HOST` is used when set. Without it, the server uses `127.0.0.1` outside production and `0.0.0.0` in production. The selected Docker deployment publishes the container only on host loopback.
-- Vite listens on **`0.0.0.0:5173`** and proxies the application paths and `/ws` to **`127.0.0.1:3000`**.
-- The frontend API client uses relative URLs when `VITE_API_BASE_URL` is empty, which is the convenient development mode with the Vite proxy. A production frontend build requires `VITE_API_BASE_URL`.
-- The optional RFID bridge starts a local provisioning HTTP service at **`127.0.0.1:3001`**. This is not the application API and is not a public port.
+The frontend is in [`app-eduassets`](https://github.com/edu-assets/app-eduassets). This repository does not contain the Pages application or its build configuration. The API is the authorization boundary; frontend controls are only usability measures.
 
-## Tech stack
+## Repository contents
 
-### Frontend
+- `backend/` — Node.js/TypeScript API, Express routes, Prisma schema, tests, and database migrations;
+- `deploy/` and `docker-compose.production.yml` — Nginx and container deployment templates;
+- `docs/` — backend operations runbooks;
+- `rpi/` and `eduStation/` — optional RFID and device-support code;
+- `.env.example` and `.env.production.example` — variable templates only; never commit real secrets.
 
-- Node.js **>=22.12.0**, TypeScript and ES modules;
-- [Vite](https://vitejs.dev/) 8, configured in `frontend/vite.config.ts`;
-- feature-first layers under `src/core`, `src/features`, `src/shared` and `src/types`;
-- `flatpickr` for date/time inputs;
-- ExcelJS, jsPDF and `jspdf-autotable` for exports;
-- `marked` for Markdown rendering; and
-- CSS custom-property tokens with Light / Dark themes.
+## Stack and security
 
-### Backend
+- Node.js **>=22.12.0**, TypeScript, and Express 5;
+- Prisma 6 with PostgreSQL;
+- bcrypt password hashing, JWT-backed sessions, request validation, rate limiting, and security headers;
+- session cookies are `HttpOnly`, `SameSite=Lax`, `Secure` over production HTTPS, and host-only; cookie-authenticated mutations require a trusted `Origin`;
+- authorization is enforced by backend route policy. Guest responses use minimized allowlisted DTOs; sensitive listings and mutations require authentication;
+- optional RFID bridge endpoints are disabled/blocked in the public deployment by default.
 
-- Node.js **>=22.12.0**, TypeScript and Express 5;
-- Prisma 6 with PostgreSQL (`schema.prisma` defines the data model);
-- JWT authentication with bcrypt password hashes;
-- Zod request validation, Helmet security headers, Morgan/Winston logging and rate limiting;
-- transactional stock operations; and
-- an opt-in `ws` WebSocket bridge at `/ws/rfid` for RFID login events.
-
-### Optional RFID hardware
-
-`rpi/rfid/rfid_admin_bridge.py` supports a native SPI reader or an Arduino Nano over USB serial. It sends card tokens to `POST /auth/rfid` with `X-RFID-Bridge-Secret`, and exposes the local `POST /provision` helper on port 3001. The shipped `eduassets-rfid.service` is a systemd unit template; installing the account, paths, Python environment, hardware libraries and network policy remains an operator task.
-
-## Authentication and access levels
-
-- **Guest:** read-only access to equipment, categories, loan summaries and occurrence summaries. Anonymous API responses use server-side allowlisted DTOs; `GET /responsaveis`, users and sensitive operational details require authentication. Mutating operations are never available without authorization.
-- **Editor:** authenticated operational actions such as loans, returns and creating/editing occurrences, subject to the route permissions.
-- **Administrator:** administrative CRUD, account/password management and RFID-token provisioning in addition to operational actions.
-
-The backend is the security boundary: the current browser flow negotiates an `HttpOnly`, `SameSite=Lax` session cookie through `/auth/session-capabilities`; on production HTTPS the cookie is `Secure` and uses the `__Host-` prefix. Cookie-authenticated mutations require a trusted `Origin`. `Authorization: Bearer <token>` remains available for older clients and fallback mode; avoid JavaScript-readable token storage when cookie sessions are supported. Guest endpoints use minimized, server-side allowlisted projections; frontend guards are for usability only. Logout and password changes update a PostgreSQL-backed per-user `sessionVersion`, invalidating older sessions across instances. Administrator inactivity still uses process-local state and is consistent only on a single backend instance; editor sessions do not use that idle timeout. Password recovery is not implemented; an authenticated user can change their own password through `PATCH /auth/senha`. See the [API reference](frontend/public/docs/API_REFERENCE.md) for the route and session contract.
-
-## Backend API surface
-
-The application router includes:
-
-- `GET /health` for liveness, `GET /ready` for bounded PostgreSQL readiness, and `GET /` for a basic status response;
-- `POST /auth/login`, `GET /auth/me`, `POST /auth/logout` and `PATCH /auth/senha`;
-- `POST /auth/rfid` for the optional local-kiosk RFID flow; the public Nginx template returns 404 for this endpoint and `/ws/rfid`;
-- CRUD routes for `/categorias`, `/equipamentos`, `/responsaveis`, `/usuarios`, `/emprestimos` and `/ocorrencias`; and
-- administrator-only RFID-token provisioning/revocation under `/usuarios/:id/rfid-token`.
-
-The detailed route/method/permission table is maintained in the [API reference](frontend/public/docs/API_REFERENCE.md).
-
-Guest responses use endpoint-specific server-side allowlists; responsible-party and user listings require authentication. Write authorization is enforced in the backend. Public demo data must be synthetic and isolated from operational data. The Prisma schema contains `Categoria`, `Equipamento`, `Responsavel`, `Usuario`, `Emprestimo`, `ItemEmprestimo` and `Ocorrencia`, with enums for access level, loan status, occurrence type and occurrence status.
+See the [API reference](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/API_REFERENCE.md), [architecture guide](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/ARCHITECTURE.md), and [operations and recovery guide](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/OPERATIONS_AND_RECOVERY.md) for the detailed contracts. The frontend repository also contains the bilingual product and deployment documentation.
 
 ## Requirements
 
 - Node.js **22.12 or newer** and npm;
-- a PostgreSQL database reachable through `DATABASE_URL`;
-- a direct PostgreSQL URL when the provider requires one (`DIRECT_URL`, otherwise the Prisma configuration falls back to `DATABASE_URL`); and
-- physical RFID hardware plus the Linux/Python dependencies only if RFID is explicitly enabled.
+- PostgreSQL for local development and tests;
+- Docker Engine and Docker Compose for the documented production deployment;
+- Linux/Python and compatible RFID hardware only when the optional bridge is explicitly enabled.
 
-Cloudflare Pages and Docker/Nginx are selected repository-side deployment templates, not configured services. No Oracle VM, DNS, TLS certificate, Cloudflare policy, hosted database, provider-side RLS or public deployment has been verified.
-
-## Install and run locally
+## Local development
 
 From the repository root:
 
 ```bash
-npm ci
 npm ci --prefix backend
-npm ci --prefix frontend
-```
-
-The root `npm ci` installs the `concurrently` helper. Backend and frontend each have their own package manifest and lockfile, so install them as shown.
-
-### Configure the backend
-
-Copy the template to the backend working directory and edit it with real, local values. Do not commit secrets:
-
-```bash
 cp .env.example backend/.env
 ```
 
-At minimum, set a PostgreSQL URL and a unique JWT secret. The explicit seed also requires `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` (see [Database setup](#database-setup)). In local development, `NODE_ENV=development` with the default loopback host permits the local CORS mode. `DATABASE_URL` is required to start outside `NODE_ENV=test`; production also requires explicit `CORS_ORIGIN` and `TRUST_PROXY`. Outside that explicit local mode, set `CORS_ORIGIN` to a comma-separated allowlist.
+On Windows PowerShell, use `Copy-Item .env.example backend/.env`. Edit `backend/.env` with a disposable development database URL and a unique `JWT_SECRET` of at least 32 random characters. Do not use production credentials for local tests and do not commit the environment file. The example configures local development; use the deployment templates and guides for production values.
 
-### Configure the frontend
-
-For the Vite proxy, keep the API base empty in `frontend/.env`:
-
-```env
-VITE_API_BASE_URL=
-VITE_RFID_BRIDGE_ENABLED=false
-```
-
-If the frontend must call an API at another origin, set `VITE_API_BASE_URL` to that origin instead. Production builds fail clearly when this variable is absent; it is a public endpoint setting, not a place for secrets.
-
-### Database setup
-
-With `backend/.env` configured and PostgreSQL available:
+Apply migrations only to the intended development database, then start the API:
 
 ```bash
-cd backend
-npx prisma migrate dev
-npm run db:seed
-cd ..
-```
-
-The seed **requires a valid `SEED_ADMIN_EMAIL` and a strong `SEED_ADMIN_PASSWORD`** (minimum 16 characters, maximum 72 UTF-8 bytes), is idempotent, and does not overwrite existing accounts or passwords. Optional editor provisioning requires both `SEED_EDITOR_EMAIL` and `SEED_EDITOR_PASSWORD`. Keep seed values in a protected, untracked env file; explicitly run the seed only after migrations, verify administrator login, change the initial password using the authenticated account flow, and clear the one-time seed variables. API startup never creates an administrator. This README provides no demo credentials.
-
-For an environment that already has committed migrations, the backend also exposes:
-
-```bash
-cd backend
-npm run migrate:deploy
-```
-
-That command applies existing migrations; it does not create a database, provision infrastructure or establish a backup policy.
-
-### Start development
-
-From the root:
-
-```bash
+npm --prefix backend run migrate:deploy
 npm run dev
 ```
 
-Before starting `backend`, confirm that `backend/.env` points to a development database and, if needed, apply migrations explicitly with `cd backend && npm run dev:db`. `npm run dev` does not apply migrations automatically: this prevents a `.env` pointing to a remote database from blocking the terminal or changing data without confirmation. Prisma Client generation runs during `npm ci` and builds, not on every startup; this avoids Windows native-DLL locks when VS Code, Node, or antivirus software still holds the file open. It does not create the database or start PostgreSQL; configure the PostgreSQL service first. If the API fails, `concurrently` now stops the frontend too instead of leaving an interface open without a backend. Once ready, the command invokes `backend` in `tsx watch` mode and the Vite frontend together. Open `http://localhost:5173`. To run one side separately:
+The root `npm run dev` and `npm run build` scripts now target the backend only. The API listens on `127.0.0.1:3000` by default in development. The frontend can be run separately from the `app-eduassets` repository; its Vite development proxy targets this API port.
+
+## Backend checks
 
 ```bash
-cd backend && npm run dev
-cd frontend && npm run dev
+npm --prefix backend test
+npm --prefix backend run test:integration
+npm run build
 ```
 
-The backend's development URL is normally `http://127.0.0.1:3000` (or the configured `HOST`/`PORT`), and the Vite proxy keeps browser API calls relative to port 5173.
+Integration tests require the configured disposable PostgreSQL database. The GitHub Actions workflow validates backend tests/build and the deployment templates; it does not deploy to Cloudflare or the Oracle VM.
 
-## Available scripts
+## Production operations
 
-### Root
+The API is deployed as a Docker Compose service on the Oracle Cloud VM, behind Nginx at `api.eduassets.tech`. The container binds to host loopback; do not expose port `3000` or PostgreSQL publicly.
 
-| Command | Effect |
-| --- | --- |
-| `npm run dev` | Starts backend and frontend concurrently. |
-| `npm run build` | Runs the backend build and then the frontend build. |
-
-### Backend
-
-| Command | Effect |
-| --- | --- |
-| `npm run dev` | `tsx watch src/server.ts`. |
-| `npm run build` | Generates Prisma Client, then compiles TypeScript with `tsc`. |
-| `npm start` | Starts `dist/src/server.js` after a build. |
-| `npm run migrate:deploy` | Applies existing Prisma migrations. |
-| `npm test` | Runs backend unit tests (no DB required). |
-| `npm run test:integration` | Runs HTTP/PostgreSQL integration and concurrency tests; requires an isolated migrated test database. |
-| `npm run db:seed` | Explicitly applies the idempotent seed (requires `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`). |
-
-### Frontend
-
-| Command | Effect |
-| --- | --- |
-| `npm run dev` | Vite development server on port 5173. |
-| `npm run build` | Builds `dist/`. |
-| `npm run preview` | Previews the built frontend locally. |
-| `npm run typecheck` | Runs `tsc --noEmit`. |
-| `npm test` | Runs the configured Vitest suite; this README makes no claim about results. |
-| `npm run test:watch` | Starts Vitest in watch mode. |
-
-These entries describe scripts present in the manifests, not evidence of a completed deployment or a particular test run.
-
-## Environment variables
-
-### Backend and database
-
-| Variable | Meaning |
-| --- | --- |
-| `NODE_ENV` | `development` enables the explicit local-development path; `production` changes the default host and proxy behavior. |
-| `PORT` / `BACKEND_PORT` | Backend port. Each provided value is validated; `PORT` has precedence; default is 3000. `BACKEND_PORT` is the compatibility fallback. |
-| `HOST` | Bind address. Default is `127.0.0.1`, or `0.0.0.0` in production when unset. |
-| `TRUST_PROXY` | Validated Express proxy setting; required explicitly in production. Use `0` without a proxy, or only the exact trusted hops/IPs for a sanitized proxy chain. |
-| `CORS_ORIGIN` | Comma-separated valid HTTP(S) origins (no path/query/fragment); required in production and outside explicit local development. |
-| `DATABASE_URL` | PostgreSQL connection used by Prisma; required. |
-| `DIRECT_URL` | Optional direct PostgreSQL connection for providers/migrations; Prisma falls back to `DATABASE_URL` when omitted. |
-| `JWT_SECRET` | JWT signing secret; use a unique, unpredictable value of at least 32 characters. |
-| `SEED_ADMIN_EMAIL` | Valid email required by the explicit first-time seed. |
-| `SEED_ADMIN_PASSWORD` | Required by the explicit seed; at least 16 characters and at most 72 UTF-8 bytes. |
-| `SEED_EDITOR_EMAIL` / `SEED_EDITOR_PASSWORD` | Optional pair; both must be supplied to seed an editor. |
-| `LOG_LEVEL` | Winston log level; the template defaults to `info`. |
-
-### Frontend
-
-| Variable | Meaning |
-| --- | --- |
-| `VITE_API_BASE_URL` | API origin used by the browser. Empty in development uses Vite's proxy; required for a production frontend build. |
-| `VITE_RFID_BRIDGE_ENABLED` | Frontend RFID-listener flag. Keep `false` unless the backend bridge is enabled and the local hardware/network policy is in place. |
-
-### RFID bridge
-
-| Variable | Meaning |
-| --- | --- |
-| `RFID_BRIDGE_ENABLED` | Backend flag. RFID WebSocket support is **off unless exactly `true`**. |
-| `RFID_BRIDGE_SECRET` | Shared secret required by the backend and Python bridge; use at least 32 random characters. |
-| `EDUASSETS_BACKEND_URL` | Bridge API origin; defaults to `http://localhost:3000`. |
-| `RFID_BACKEND` | Reader mode: `spi` (default) or `serial`. |
-| `RFID_SERIAL_PORT` | Serial device when `RFID_BACKEND=serial`; defaults to `/dev/ttyUSB0`. |
-| `RFID_SOUND_DEVICE` | Optional ALSA device for synthesized feedback tones. |
-
-## Optional RFID setup and security boundary
-
-RFID is intentionally disabled by default. Enabling it requires all of the following:
-
-1. set `RFID_BRIDGE_ENABLED=true` on the backend and, when using the browser listener, `VITE_RFID_BRIDGE_ENABLED=true`;
-2. configure the same strong `RFID_BRIDGE_SECRET` on backend and bridge;
-3. install and validate the actual reader hardware and its Python dependencies;
-4. use a separate local-kiosk instance without a public proxy for the bridge. Both `POST /auth/rfid` and the `/ws/rfid` upgrade reject non-loopback peers; behind Nginx, the backend sees the proxy loopback and that is not proof the original caller is local. The public template blocks both routes with 404;
-5. keep the provisioning helper on `127.0.0.1:3001`, protect its environment file and restrict any reverse proxy/firewall exposure; and
-6. validate card read/write behavior and the network policy on the target machine before relying on it.
-
-The bridge can be run manually on a compatible Linux host:
+After a backend code/configuration change, update and recreate the API service using the documented procedure:
 
 ```bash
-cd rpi/rfid
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-export RFID_BRIDGE_SECRET='use-the-same-strong-secret-as-the-backend'
-export EDUASSETS_BACKEND_URL='http://localhost:3000'
-python3 rfid_admin_bridge.py
+cd /opt/eduassets
+git pull --ff-only origin main
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --build --force-recreate api
 ```
 
-Use `RFID_BACKEND=serial` and `RFID_SERIAL_PORT` for the Arduino-Nano path. The unit file expects a dedicated `eduassets` account, `/opt/eduassets-rfid`, a virtual environment and `/etc/eduassets/rfid_bridge.env` with mode 600. The repository does not perform that machine installation, create the account, verify systemd on the target OS or certify a specific Raspberry Pi/GPIO combination.
-
-## Project structure
-
-```text
-eduAssets/
-├── frontend/
-│   ├── public/docs/          # English and Portuguese in-app documentation
-│   ├── src/core/             # API, auth, state, UI primitives, RFID listener
-│   ├── src/features/         # dashboard, loans, returns, control, admin, exports...
-│   ├── src/shared/           # reusable UI pieces
-│   ├── src/types/            # shared TypeScript types
-│   └── vite.config.ts
-├── backend/
-│   ├── prisma/               # schema, migrations and seed
-│   ├── integration-tests/    # PostgreSQL HTTP/race tests (CI only)
-│   └── src/                  # server, routes, controllers, services, middleware
-├── rpi/rfid/                 # optional Python RFID bridge and systemd unit
-├── deploy/                   # Nginx and safe backup/restore templates
-├── .github/workflows/        # CI checks; not deployment automation
-├── docker-compose.production.yml
-├── .env.example              # local environment template
-├── .env.production.example   # deployment template only
-└── package.json              # root dev/build orchestration
-```
-
-The frontend follows a feature-first, layered structure. `core` contains infrastructure and state primitives, `features` owns screen workflows, `shared` contains reusable view pieces, and `types` centralizes contracts. Dynamic HTML uses the project's escaping template helper rather than treating user data as trusted markup.
-
-## Current limitations and release notes
-
-- The current documentation pass did not verify public DNS, TLS, Cloudflare settings, Oracle VM, production database, secret rotation, or live service availability. The changelog/roadmap preserve the operator-reported October 23 Beta deployment as historical evidence; it is not a live health check. Repository deployment files are templates for controlled operator use.
-- Access control for application requests is implemented in the backend. Provider-side grants/PostgREST are not part of the app's request path; if exposed by a selected provider, review them separately and block unintended anonymous access.
-- Production requires explicit `CORS_ORIGIN` and `TRUST_PROXY`; validate the actual proxy and firewall topology before deployment.
-- RFID is an opt-in hardware integration, not a fallback login. It needs a compatible reader, Linux/Python dependencies, a strong shared secret, loopback reachability and an explicit firewall/proxy policy.
-- Asset quantities are tracked at model/category level; individual serial-number tracking is out of scope for the current model.
-- Access levels are Administrator and Editor; there is no finer-grained per-panel role system.
-- Password recovery is not implemented. Password change is available only to an authenticated user.
-- The return modal sends and persists the selected offset-aware timestamp; old clients may omit it and use server time.
-- The changelog records hosted CI run `39875293195` passing `verify` and `production-smoke` for commit `a8cd39b`; this does not validate the current checkout or deploy it. Remaining manual validation includes target hardware, current Nginx/Cloudflare proxy/TLS state, backup/restore, accessibility and browser flows.
-
-## Roadmap
-
-Completed code paths include the TypeScript frontend, cookie-first session authentication (with legacy Bearer fallback), allowlisted Guest DTOs, Light/Dark/System themes, transactional stock operations, exports, rate limiting, admin idle timeout, selected return date and optional RFID. Hosted CI run `39875293195` is recorded as passing `verify` and `production-smoke` for `a8cd39b`; CI does not deploy. Current infrastructure/backup verification, manual accessibility/hardware/proxy checks and React migration remain roadmap items.
-
-## License
-
-The project is released under the MIT license. See the repository license file for the authoritative text.
-
-## Deployment and operations
-
-The selected topology, Docker targets, Cloudflare Pages build variables, Nginx trust boundary, TLS, firewall, backup/restore, monitoring, release and rollback steps are documented in the [English deployment guide](frontend/public/docs/DEPLOYMENT.md) and [Portuguese guide](frontend/public/docs/GUIA_IMPLANTACAO.md). These are templates requiring operator verification; they do not perform a deployment.
-
-GitHub Actions validates code and smoke-tests disposable services; it does not deploy the frontend or restart the API. For operational triage and recovery limits, see [Operations and Recovery](frontend/public/docs/OPERATIONS_AND_RECOVERY.md) and [Operação e Recuperação](frontend/public/docs/OPERACAO_E_RECUPERACAO.md).
+A full VM reboot is not required for ordinary application changes. Database migrations are separate, explicit operations; follow the deployment guide and verify backups before applying them. See the [deployment guide](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/DEPLOYMENT.md), [Portuguese deployment guide](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/GUIA_IMPLANTACAO.md), and the local [password reset runbook](docs/ADMIN_PASSWORD_RESET_RUNBOOK.md).

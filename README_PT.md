@@ -1,320 +1,96 @@
-# eduAssets
+# Backend do eduAssets
 
-<div align="center">
-  <img src="frontend/public/assets/img/eduAssets_banner.png" alt="Banner eduAssets" width="100%">
-</div>
+[README em inglês](README.md) · [Aplicação frontend](https://github.com/edu-assets/app-eduassets)
 
-[README raiz em inglês](README.md) · [Documentação em inglês](frontend/public/docs/README.md) · [Documentação em português](frontend/public/docs/LEIAME.md) · [API reference](frontend/public/docs/API_REFERENCE.md) · [Referência da API](frontend/public/docs/REFERENCIA_API.md) · [Development guide](frontend/public/docs/DEVELOPMENT.md) · [Guia de desenvolvimento](frontend/public/docs/DESENVOLVIMENTO.md) · [Guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) · [Guia de implantação em português](frontend/public/docs/GUIA_IMPLANTACAO.md)
-
-> **Status: Beta.** O checkout contém frontend Vite/TypeScript e backend Node/Express/TypeScript, login por sessão cookie `HttpOnly` quando suportado, modo convidado, empréstimos/devoluções, ocorrências, exportações e integração RFID opcional. O changelog registra implantação Cloudflare Pages/Oracle reportada pelo operador em 23/10/2026; esta revisão documental não revalidou a infraestrutura remota atual. O repositório registra o CI hospedado `39875293195` como aprovado em `verify` e `production-smoke` para o commit `a8cd39b`; isso é evidência de validação, não implantação automática.
+> **Status: Beta.** Este repositório contém a API do eduAssets, a integração com o banco de dados e arquivos de suporte à implantação/operação do backend. A aplicação de navegador é mantida separadamente em [`edu-assets/app-eduassets`](https://github.com/edu-assets/app-eduassets).
 
 ## Visão geral
 
-**eduAssets** é uma aplicação para empréstimo de equipamentos escolares e gestão de inventário. Foi projetada para fluxos operacionais frequentes usados por administradores e editores, e não para rastreamento de números de série por unidade.
+O serviço eduAssets atende fluxos de inventário e empréstimo de equipamentos escolares. A API gerencia autenticação, acesso de convidado somente leitura, equipamentos e categorias, empréstimos e devoluções, ocorrências e integração opcional de login RFID.
 
-A aplicação abrange:
-
-- registro de empréstimos e devoluções de equipamentos;
-- consultas de estoque e histórico de empréstimos com pesquisa/filtros;
-- ocorrências de equipamentos (observação, manutenção e itens quebrados);
-- administração CRUD de categorias, equipamentos, responsáveis e usuários;
-- exportações CSV, Excel e PDF; e
-- sessões autenticadas, permissões de administrador/editor, acesso somente leitura para convidados e login opcional por cartão físico via RFID.
-
-A interface também inclui seleção persistente de tema Claro / Escuro / Sistema. O frontend atual usa TypeScript e renderização nativa do DOM; React é um item futuro do roadmap, não uma dependência atual.
-
-## Topologia de execução
-
-Na configuração local padrão, os processos seguem esta organização:
+A topologia de produção está dividida por serviço:
 
 ```text
-Navegador ── http://localhost:5173 ── servidor de desenvolvimento Vite
-                                          │ proxy (/auth, /usuarios, /ws, ...)
-                                          ▼
-                                     API :3000 ── PostgreSQL
-
-Bridge RFID opcional (quiosque local) ── backend /auth/rfid (não exposto pelo proxy público)
-                     └─ provisionador local http://127.0.0.1:3001/provision
+Navegador → Cloudflare Pages: app.eduassets.tech
+                            │ requisições HTTPS à API
+                            ▼
+                 Cloudflare → Nginx na VM Oracle
+                            │ proxy pelo loopback
+                            ▼
+                     API Docker: 127.0.0.1:3000
+                            │ PostgreSQL TLS
+                            ▼
+                          Neon
 ```
 
-- O backend escuta na **porta 3000 por padrão**. `PORT` tem precedência sobre `BACKEND_PORT`; cada valor fornecido é validado, e um valor inválido faz a inicialização falhar em vez de usar silenciosamente um valor alternativo.
-- `HOST` é usado quando definido. Sem essa variável, o servidor usa `127.0.0.1` fora de produção e `0.0.0.0` em produção. O deployment Docker selecionado publica o contêiner somente no loopback do host.
-- O Vite escuta em **`0.0.0.0:5173`** e encaminha os caminhos da aplicação e `/ws` para **`127.0.0.1:3000`**.
-- O cliente de API do frontend usa URLs relativas quando `VITE_API_BASE_URL` está vazio, o que é conveniente no desenvolvimento com o proxy do Vite. Uma build de frontend para produção exige `VITE_API_BASE_URL`.
-- A bridge RFID opcional inicia um serviço HTTP local de provisionamento em **`127.0.0.1:3001`**. Essa não é a API da aplicação nem uma porta pública.
+O frontend está em [`app-eduassets`](https://github.com/edu-assets/app-eduassets). Este repositório não contém a aplicação Pages nem sua configuração de build. A API é a fronteira de autorização; controles no frontend são apenas medidas de usabilidade.
 
-## Stack tecnológica
+## Conteúdo do repositório
 
-### Frontend
+- `backend/` — API Node.js/TypeScript, rotas Express, schema Prisma, testes e migrations;
+- `deploy/` e `docker-compose.production.yml` — templates de implantação de Nginx e contêineres;
+- `docs/` — runbooks operacionais do backend;
+- `rpi/` e `eduStation/` — código opcional de suporte a RFID e dispositivos;
+- `.env.example` e `.env.production.example` — somente templates de variáveis; nunca faça commit de segredos reais.
 
-- Node.js **>=22.12.0** (execução local no checkout: Node 22.13), TypeScript e módulos ES;
-- [Vite](https://vitejs.dev/) 8, configurado em `frontend/vite.config.ts`;
-- camadas organizadas por funcionalidade em `src/core`, `src/features`, `src/shared` e `src/types`;
-- `flatpickr` para entradas de data/hora;
-- ExcelJS, jsPDF e `jspdf-autotable` para exportações;
-- `marked` para renderização Markdown; e
-- tokens CSS customizados com temas Claro / Escuro.
-
-### Backend
+## Stack e segurança
 
 - Node.js **>=22.12.0**, TypeScript e Express 5;
-- Prisma 6 com PostgreSQL (`schema.prisma` define o modelo de dados);
-- autenticação JWT com hashes de senha bcrypt;
-- validação de requisições com Zod, cabeçalhos de segurança Helmet, logs Morgan/Winston e limitação de taxa;
-- operações transacionais de estoque; e
-- bridge WebSocket `ws` opcional em `/ws/rfid` para eventos de login RFID.
+- Prisma 6 com PostgreSQL;
+- hashes de senha com bcrypt, sessões baseadas em JWT, validação de requisições, limitação de taxa e cabeçalhos de segurança;
+- cookies de sessão `HttpOnly`, `SameSite=Lax`, `Secure` em HTTPS de produção e restritos ao host; mutações autenticadas por cookie exigem um `Origin` confiável;
+- a autorização é aplicada pelas políticas de rota do backend. Respostas de convidado usam DTOs minimizados e allowlisted; consultas sensíveis e mutações exigem autenticação;
+- endpoints da bridge RFID opcional ficam desativados/bloqueados no deployment público por padrão.
 
-### Hardware RFID opcional
-
-`rpi/rfid/rfid_admin_bridge.py` oferece suporte a um leitor SPI nativo ou a um Arduino Nano via serial USB. Envia tokens de cartão para `POST /auth/rfid` com `X-RFID-Bridge-Secret` e disponibiliza o auxiliar local `POST /provision` na porta 3001. O arquivo `eduassets-rfid.service` fornecido é um template de unidade systemd; instalar a conta, os caminhos, o ambiente Python, as bibliotecas de hardware e a política de rede continua sendo uma tarefa do operador.
-
-## Autenticação e níveis de acesso
-
-- **Convidado:** acesso somente leitura a equipamentos, categorias, resumos de empréstimos e resumos de ocorrências. As respostas anônimas da API usam DTOs permitidos por lista de inclusão no servidor; `GET /responsaveis`, usuários e detalhes operacionais sensíveis exigem autenticação. Operações de alteração nunca ficam disponíveis sem autorização.
-- **Editor:** ações operacionais autenticadas, como empréstimos, devoluções e criação/edição de ocorrências, sujeitas às permissões das rotas.
-- **Administrador:** CRUD administrativo, gerenciamento de contas/senhas e provisionamento de tokens RFID, além das ações operacionais.
-
-O backend é a fronteira de segurança: o navegador negocia sessão por cookie `HttpOnly` e `SameSite=Lax` através de `/auth/session-capabilities`; em HTTPS de produção o cookie usa `Secure` e o prefixo `__Host-`. Alterações autenticadas por cookie exigem `Origin` confiável. `Authorization: Bearer <token>` permanece disponível para clientes antigos e modo de compatibilidade; evite persistir token acessível a JavaScript quando cookies de sessão forem suportados. Os endpoints de convidado usam projeções minimizadas, permitidas por lista de inclusão no servidor; as proteções do frontend servem apenas à usabilidade. Logout e troca de senha atualizam `sessionVersion` por usuário no PostgreSQL, invalidando sessões anteriores entre instâncias. O timeout de inatividade de administradores ainda usa estado local ao processo e só é consistente em uma instância; sessões de editor não usam esse timeout. A recuperação de senha não está implementada; um usuário autenticado pode alterar a própria senha por `PATCH /auth/senha`. Consulte a [Referência da API](frontend/public/docs/REFERENCIA_API.md) para rotas, permissões e detalhes da sessão.
-
-## Superfície da API do backend
-
-O roteador da aplicação inclui:
-
-- `GET /health` para liveness, `GET /ready` para readiness limitada do PostgreSQL e `GET /` para uma resposta básica de status;
-- `POST /auth/login`, `GET /auth/me`, `POST /auth/logout` e `PATCH /auth/senha`;
-- `POST /auth/rfid` para o fluxo RFID opcional do quiosque local; o template Nginx público retorna 404 para esse endpoint e para `/ws/rfid`;
-- rotas CRUD para `/categorias`, `/equipamentos`, `/responsaveis`, `/usuarios`, `/emprestimos` e `/ocorrencias`; e
-- provisionamento/revogação de tokens RFID, somente para administradores, em `/usuarios/:id/rfid-token`.
-
-A tabela detalhada de métodos, rotas e permissões está na [Referência da API](frontend/public/docs/REFERENCIA_API.md).
-
-Respostas públicas anônimas e minimizadas estão limitadas, por DTOs allowlisted específicos no servidor, às categorias, equipamentos, empréstimos e ocorrências; consultas de responsáveis e usuários exigem autenticação. A autorização de escrita é aplicada no backend. Os dados de demonstração públicos devem ser sintéticos e isolados dos dados operacionais. O schema Prisma contém `Categoria`, `Equipamento`, `Responsavel`, `Usuario`, `Emprestimo`, `ItemEmprestimo` e `Ocorrencia`, com enums para nível de acesso, status de empréstimo, tipo de ocorrência e status de ocorrência.
+Consulte a [Referência da API](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/REFERENCIA_API.md), o [guia de arquitetura](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/ARQUITETURA.md) e [Operação e recuperação](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/OPERACAO_E_RECUPERACAO.md) para os contratos detalhados. O repositório do frontend também contém a documentação bilíngue do produto e de implantação.
 
 ## Requisitos
 
 - Node.js **22.12 ou mais recente** e npm;
-- um banco PostgreSQL acessível por `DATABASE_URL`;
-- uma URL PostgreSQL direta quando exigida pelo provedor (`DIRECT_URL`; caso contrário, a configuração Prisma usa `DATABASE_URL` como fallback); e
-- hardware RFID físico e dependências Linux/Python somente se o RFID for explicitamente habilitado.
+- PostgreSQL para desenvolvimento local e testes;
+- Docker Engine e Docker Compose para a implantação de produção documentada;
+- Linux/Python e hardware RFID compatível somente se a bridge opcional for explicitamente habilitada.
 
-Cloudflare Pages e Docker/Nginx são templates de implantação selecionados no repositório, não serviços configurados. Nenhuma VM Oracle, DNS, certificado TLS, política Cloudflare, banco hospedado, RLS no provedor ou implantação pública foi verificada.
-
-## Instalar e executar localmente
+## Desenvolvimento local
 
 Na raiz do repositório:
 
 ```bash
-npm ci
-npm --prefix backend ci
-npm --prefix frontend ci
-```
-
-A instalação na raiz instala o utilitário auxiliar `concurrently`. Backend e frontend têm cada um seu próprio manifesto de pacotes e árvore de dependências; por isso, instale-os como mostrado.
-
-### Configurar o backend
-
-Copie o template para o diretório de trabalho do backend e edite-o com valores locais reais. Não faça commit de segredos:
-
-```bash
+npm ci --prefix backend
 cp .env.example backend/.env
 ```
 
-No mínimo, defina uma URL PostgreSQL e um segredo JWT exclusivo. O seed explícito também exige `SEED_ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD` (consulte [Configuração do banco de dados](#configuração-do-banco-de-dados)). No desenvolvimento local, `NODE_ENV=development` com o host loopback padrão permite o modo CORS local. `DATABASE_URL` é necessária para iniciar fora de `NODE_ENV=test`; em produção também são exigidos `CORS_ORIGIN` e `TRUST_PROXY` explícitos. Fora desse modo local explícito, defina `CORS_ORIGIN` como uma lista de permissões separadas por vírgula.
+No Windows PowerShell, use `Copy-Item .env.example backend/.env`. Edite `backend/.env` com uma URL de banco de desenvolvimento descartável e um `JWT_SECRET` exclusivo, com pelo menos 32 caracteres aleatórios. Não use credenciais de produção nos testes locais e não faça commit desse arquivo. O exemplo configura desenvolvimento local; use os templates e guias de implantação para valores de produção.
 
-### Configurar o frontend
-
-Para usar o proxy do Vite, mantenha a base da API vazia em `frontend/.env`:
-
-```env
-VITE_API_BASE_URL=
-VITE_RFID_BRIDGE_ENABLED=false
-```
-
-Se o frontend precisar chamar uma API em outra origem, defina `VITE_API_BASE_URL` com essa origem. Builds de produção falham claramente se essa variável estiver ausente; ela é uma configuração de endpoint público, não um local para segredos.
-
-### Configuração do banco de dados
-
-Com `backend/.env` configurado e PostgreSQL disponível:
+Aplique migrations somente ao banco de desenvolvimento correto e inicie a API:
 
 ```bash
-cd backend
-npx prisma migrate dev
-npm run db:seed
-cd ..
-```
-
-O seed **exige `SEED_ADMIN_EMAIL` válido e `SEED_ADMIN_PASSWORD` forte** (mínimo 16 caracteres, máximo de 72 bytes UTF-8), é idempotente e não sobrescreve contas ou senhas existentes. Para provisionar Editor, informe ambos `SEED_EDITOR_EMAIL` e `SEED_EDITOR_PASSWORD`. Mantenha os valores em arquivo protegido e não rastreado; execute o seed explicitamente após as migrations, verifique o login, altere a senha inicial pelo fluxo autenticado e limpe as variáveis de seed de uso único. O startup da API não cria administrador. Este README não fornece credenciais demo.
-
-Para um ambiente que já tenha migrations versionadas, o backend também oferece:
-
-```bash
-cd backend
-npm run migrate:deploy
-```
-
-Esse comando aplica migrations existentes; não cria um banco de dados, não provisiona infraestrutura nem estabelece uma política de backup.
-
-### Iniciar o desenvolvimento
-
-Na raiz:
-
-```bash
+npm --prefix backend run migrate:deploy
 npm run dev
 ```
 
-Antes de iniciar o `backend`, confirme que `backend/.env` aponta para um banco de desenvolvimento e, se necessário, aplique as migrations explicitamente com `cd backend && npm run dev:db`. O `npm run dev` não aplica migrations automaticamente: isso evita que um `.env` apontando para um banco remoto bloqueie o terminal ou sofra alterações sem confirmação. A geração do Prisma Client ocorre no `npm ci` e no build; ela não é repetida a cada startup, evitando bloqueios da DLL nativa no Windows quando VS Code, Node ou antivírus mantêm o arquivo aberto. O comando não cria o banco nem inicia o PostgreSQL; configure o serviço PostgreSQL antes de executá-lo. Se a API falhar, `concurrently` encerra também o frontend em vez de deixar a interface aberta sem backend. Com tudo pronto, o comando inicia em conjunto o `backend` no modo `tsx watch` e o frontend Vite. Abra `http://localhost:5173`. Para executar cada lado separadamente:
+Os scripts de raiz `npm run dev` e `npm run build` agora executam somente o backend. Em desenvolvimento, a API escuta por padrão em `127.0.0.1:3000`. O frontend é executado separadamente a partir do repositório `app-eduassets`; o proxy de desenvolvimento Vite desse repositório aponta para essa porta.
+
+## Verificações do backend
 
 ```bash
-cd backend && npm run dev
-cd frontend && npm run dev
+npm --prefix backend test
+npm --prefix backend run test:integration
+npm run build
 ```
 
-A URL de desenvolvimento do backend normalmente é `http://127.0.0.1:3000` (ou o `HOST`/`PORT` configurado), e o proxy Vite mantém as chamadas de API do navegador relativas à porta 5173.
+Os testes de integração exigem o PostgreSQL descartável configurado. O GitHub Actions verifica testes/build do backend e templates de implantação; não faz deploy no Cloudflare nem na VM Oracle.
 
-## Scripts disponíveis
+## Operação de produção
 
-### Raiz
+A API é executada como serviço Docker Compose na VM Oracle Cloud, atrás do Nginx em `api.eduassets.tech`. O contêiner publica a porta somente no loopback do host; não exponha publicamente a porta `3000` nem o PostgreSQL.
 
-| Comando | Efeito |
-| --- | --- |
-| `npm run dev` | Inicia backend e frontend em paralelo. |
-| `npm run build` | Executa primeiro a build do backend e depois a do frontend. |
-
-### Backend
-
-| Comando | Efeito |
-| --- | --- |
-| `npm run dev` | `tsx watch src/server.ts`. |
-| `npm run build` | Gera o Prisma Client e depois compila TypeScript com `tsc`. |
-| `npm start` | Inicia `dist/src/server.js` após uma build. |
-| `npm run migrate:deploy` | Aplica migrations Prisma existentes. |
-| `npm test` | Executa testes unitários do backend (não exige banco de dados). |
-| `npm run test:integration` | Executa testes de integração e concorrência HTTP/PostgreSQL; exige um banco de teste isolado com migrations aplicadas. |
-| `npm run db:seed` | Aplica o seed idempotente (exige `SEED_ADMIN_EMAIL` e `SEED_ADMIN_PASSWORD`). |
-
-### Frontend
-
-| Comando | Efeito |
-| --- | --- |
-| `npm run dev` | Servidor de desenvolvimento Vite na porta 5173. |
-| `npm run build` | Gera `dist/`. |
-| `npm run preview` | Pré-visualiza localmente o frontend compilado. |
-| `npm run typecheck` | Executa `tsc --noEmit`. |
-| `npm test` | Executa a suíte Vitest configurada; este README não afirma resultados. |
-| `npm run test:watch` | Inicia Vitest em modo watch. |
-
-Essas entradas descrevem scripts presentes nos manifestos, não evidenciam uma implantação concluída nem uma execução específica de testes.
-
-## Variáveis de ambiente
-
-### Backend e banco de dados
-
-| Variável | Significado |
-| --- | --- |
-| `NODE_ENV` | `development` habilita o caminho explícito de desenvolvimento local; `production` altera o host padrão e o comportamento do proxy. |
-| `PORT` / `BACKEND_PORT` | Porta do backend. Cada valor fornecido é validado; `PORT` tem precedência; o padrão é 3000. `BACKEND_PORT` é a alternativa de compatibilidade. |
-| `HOST` | Endereço de bind. O padrão é `127.0.0.1` ou, em produção, `0.0.0.0` quando não definido. |
-| `TRUST_PROXY` | Configuração validada de proxy do Express; obrigatória explicitamente em produção. Use `0` sem proxy, ou somente os saltos/IPs exatos e confiáveis para uma cadeia de proxy sanitizada. |
-| `CORS_ORIGIN` | Origens HTTP(S) válidas separadas por vírgula (sem caminho/query/fragmento); obrigatória em produção e fora do modo de desenvolvimento local explícito. |
-| `DATABASE_URL` | Conexão PostgreSQL usada pelo Prisma; obrigatória. |
-| `DIRECT_URL` | Conexão PostgreSQL direta opcional para provedores/migrations; se omitida, o Prisma usa `DATABASE_URL` como fallback. |
-| `JWT_SECRET` | Segredo de assinatura JWT; use um valor exclusivo, imprevisível e com pelo menos 32 caracteres. |
-| `SEED_ADMIN_EMAIL` | Email válido obrigatório, usado somente no seed inicial explícito. |
-| `SEED_ADMIN_PASSWORD` | Obrigatória no seed explícito; mínimo 16 caracteres e máximo de 72 bytes UTF-8. |
-| `SEED_EDITOR_EMAIL` / `SEED_EDITOR_PASSWORD` | Par opcional; ambos são necessários para provisionar Editor. |
-| `LOG_LEVEL` | Nível de log Winston; o template usa `info` como padrão. |
-
-### Frontend
-
-| Variável | Significado |
-| --- | --- |
-| `VITE_API_BASE_URL` | Origem da API usada pelo navegador. Vazia em desenvolvimento, usa o proxy do Vite; obrigatória para uma build do frontend de produção. |
-| `VITE_RFID_BRIDGE_ENABLED` | Flag do listener RFID do frontend. Mantenha `false`, a menos que a bridge do backend esteja habilitada e a política local de hardware/rede esteja configurada. |
-
-### Bridge RFID
-
-| Variável | Significado |
-| --- | --- |
-| `RFID_BRIDGE_ENABLED` | Flag do backend. O suporte WebSocket RFID fica **desligado, exceto quando o valor é exatamente `true`**. |
-| `RFID_BRIDGE_SECRET` | Segredo compartilhado exigido pelo backend e pela bridge Python; use pelo menos 32 caracteres aleatórios. |
-| `EDUASSETS_BACKEND_URL` | Origem da API da bridge; o padrão é `http://localhost:3000`. |
-| `RFID_BACKEND` | Modo do leitor: `spi` (padrão) ou `serial`. |
-| `RFID_SERIAL_PORT` | Dispositivo serial quando `RFID_BACKEND=serial`; o padrão é `/dev/ttyUSB0`. |
-| `RFID_SOUND_DEVICE` | Dispositivo ALSA opcional para tons de feedback sintetizados. |
-
-## Configuração RFID opcional e fronteira de segurança
-
-RFID é intencionalmente desabilitado por padrão. Habilitá-lo exige todos os itens a seguir:
-
-1. definir `RFID_BRIDGE_ENABLED=true` no backend e, ao usar o listener do navegador, `VITE_RFID_BRIDGE_ENABLED=true`;
-2. configurar o mesmo `RFID_BRIDGE_SECRET` forte no backend e na bridge;
-3. instalar e validar o hardware real do leitor e suas dependências Python;
-4. usar uma instância de quiosque/local sem proxy público para a bridge. Tanto `POST /auth/rfid` quanto a atualização para `/ws/rfid` rejeitam pares não loopback; atrás de Nginx, o loopback observado pelo backend é o proxy e não prova que o chamador original é local. O template público bloqueia ambos com 404;
-5. manter o auxiliar de provisionamento em `127.0.0.1:3001`, proteger seu arquivo de ambiente e restringir a exposição por qualquer proxy reverso/firewall; e
-6. validar o comportamento de leitura/gravação do cartão e a política de rede na máquina de destino antes de depender deles.
-
-A bridge pode ser executada manualmente em um host Linux compatível:
+Após uma alteração de código/configuração do backend, atualize e recrie o serviço da API pelo procedimento documentado:
 
 ```bash
-cd rpi/rfid
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-export RFID_BRIDGE_SECRET='use-the-same-strong-secret-as-the-backend'
-export EDUASSETS_BACKEND_URL='http://localhost:3000'
-python3 rfid_admin_bridge.py
+cd /opt/eduassets
+git pull --ff-only origin main
+docker compose --env-file .env.production -f docker-compose.production.yml up -d --build --force-recreate api
 ```
 
-Use `RFID_BACKEND=serial` e `RFID_SERIAL_PORT` para o caminho do Arduino Nano. O arquivo de unidade espera uma conta dedicada `eduassets`, `/opt/eduassets-rfid`, um ambiente virtual e `/etc/eduassets/rfid_bridge.env` com modo 600. O repositório não realiza essa instalação na máquina, não cria a conta, não verifica systemd no sistema operacional de destino nem certifica uma combinação específica de Raspberry Pi/GPIO.
-
-## Estrutura do projeto
-
-```text
-eduAssets/
-├── frontend/
-│   ├── public/docs/          # documentação interna em inglês e português
-│   ├── src/core/             # API, autenticação, estado, primitivas de UI, listener RFID
-│   ├── src/features/         # painel, empréstimos, devoluções, controle, administração, exportações...
-│   ├── src/shared/           # componentes de UI reutilizáveis
-│   ├── src/types/            # tipos TypeScript compartilhados
-│   └── vite.config.ts
-├── backend/
-│   ├── prisma/               # schema, migrations e seed
-│   ├── integration-tests/    # testes PostgreSQL HTTP/concorrência (somente CI)
-│   └── src/                  # servidor, rotas, controladores, serviços, middleware
-├── rpi/rfid/                 # bridge RFID Python opcional e unidade systemd
-├── deploy/                   # templates Nginx e de backup/restauração segura
-├── .github/workflows/        # verificações CI; não é automação de implantação
-├── docker-compose.production.yml
-├── .env.example              # template de ambiente local
-├── .env.production.example   # somente template de implantação
-└── package.json              # orquestração de desenvolvimento/build da raiz
-```
-
-O frontend segue uma estrutura em camadas, organizada por funcionalidade. `core` contém infraestrutura e primitivas de estado, `features` é responsável pelos fluxos das telas, `shared` contém componentes visuais reutilizáveis e `types` centraliza os contratos. O HTML dinâmico usa o helper de templates com escape do projeto, em vez de tratar dados do usuário como marcação confiável.
-
-## Limitações atuais e notas de versão
-
-- Nesta revisão não foram verificados DNS público, TLS, configuração Cloudflare, VM Oracle, banco de produção, rotação de segredos ou disponibilidade dos serviços. O changelog/roadmap mantêm como histórico o deployment Beta reportado em 23/10; isso não é health check ao vivo. Os arquivos de implantação são templates para uso controlado pelo operador.
-- O controle de acesso às requisições da aplicação é implementado no backend. Grants/PostgREST do provedor não fazem parte do caminho de requisições do app; se forem expostos por um provedor selecionado, revise-os separadamente e bloqueie acesso anônimo não intencional.
-- Produção exige `CORS_ORIGIN` e `TRUST_PROXY` explícitos; valide a topologia real de proxy e firewall antes da implantação.
-- RFID é uma integração de hardware opt-in, não um método alternativo de login. Exige leitor compatível, dependências Linux/Python, segredo compartilhado forte, conectividade loopback e política explícita de firewall/proxy.
-- As quantidades de ativos são controladas no nível de modelo/categoria; rastreamento individual por número de série está fora do escopo do modelo atual.
-- Os níveis de acesso são Administrador e Editor; não há sistema de funções mais granulares por painel.
-- A recuperação de senha não está implementada. A alteração de senha está disponível somente para um usuário autenticado.
-- O modal de devolução envia e persiste o timestamp selecionado com offset; clientes antigos podem omiti-lo e usar o horário do servidor.
-- O changelog registra o CI hospedado `39875293195` aprovado em `verify` e `production-smoke` para o commit `a8cd39b`; isso não valida o checkout atual nem o implanta. Permanecem verificações manuais de hardware-alvo, estado atual de proxy/TLS Nginx/Cloudflare, backup/restauração, acessibilidade e fluxos nos navegadores.
-
-## Roadmap
-
-Os caminhos de código concluídos incluem frontend TypeScript, sessão cookie-first (com fallback Bearer legado), DTOs de convidado allowlisted, temas Claro/Escuro/Sistema, operações transacionais, exportações, timeout do administrador e RFID opcional. O CI hospedado `39875293195` está registrado como aprovado em `verify` e `production-smoke` para `a8cd39b`; CI não faz deployment. Verificação atual de infraestrutura/backup, acessibilidade/hardware/proxy e migração para React continuam no roadmap.
-
-## Licença
-
-O projeto é distribuído sob a licença MIT. Consulte o arquivo de licença do repositório para o texto oficial.
-
-## Implantação e operações
-
-A topologia selecionada, alvos Docker, variáveis de build do Cloudflare Pages, fronteira de confiança Nginx, TLS, firewall, backup/restauração, monitoramento, release e procedimentos de rollback estão documentados no [guia de implantação em inglês](frontend/public/docs/DEPLOYMENT.md) e no [guia em português](frontend/public/docs/GUIA_IMPLANTACAO.md). São templates que exigem verificação do operador; não realizam uma implantação.
-
-O GitHub Actions valida o código e executa smoke tests em serviços descartáveis; não publica o frontend nem reinicia a API. Para triagem operacional e limites de recuperação, consulte [Operação e Recuperação](frontend/public/docs/OPERACAO_E_RECUPERACAO.md) e [Operations and Recovery](frontend/public/docs/OPERATIONS_AND_RECOVERY.md).
+Um reboot completo da VM não é necessário para alterações comuns da aplicação. Migrations de banco são operações separadas e explícitas; siga o guia de implantação e confirme os backups antes de aplicá-las. Consulte o [guia de implantação](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/GUIA_IMPLANTACAO.md), o [guia em inglês](https://github.com/edu-assets/app-eduassets/blob/main/public/docs/DEPLOYMENT.md) e o runbook local de [redefinição de senha](docs/ADMIN_PASSWORD_RESET_RUNBOOK.md).

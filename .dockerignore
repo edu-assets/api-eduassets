@@ -8,4 +8,3 @@
 !.env.example
 !.env.production.example
 npm-debug.log*
-frontend/public/docs/*.pdf
