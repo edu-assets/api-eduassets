@@ -14,7 +14,7 @@ npm run build
 npm run dev
 ```
 
-Production builds use the public `VITE_API_BASE_URL` setting for the API. `VITE_DOCS_BASE_URL` is optional; when configured, the documentation service tries the central docs repository first and falls back to the bundled Markdown. Never put secrets in `VITE_*` variables. The canonical bilingual documents are in [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets), under `public/docs/`.
+Production builds use the public `VITE_API_BASE_URL` setting for the API. The documentation reader uses `https://docs.eduassets.tech` by default; `VITE_DOCS_BASE_URL` is an optional base-URL override. Bundled Markdown is used only when the remote request fails or returns a non-success response. Never put secrets in `VITE_*` variables. The canonical bilingual documents are in [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets), under `public/docs/`.
 
 The frontend is deployed independently through its Cloudflare Pages pipeline. Frontend-only changes do not require a pull, rebuild, or restart on the Oracle API VM.
 
@@ -32,6 +32,6 @@ npm run build
 npm run dev
 ```
 
-Builds de produção usam a variável pública `VITE_API_BASE_URL` para indicar a API. `VITE_DOCS_BASE_URL` é opcional; quando configurada, o serviço tenta primeiro o repositório central de documentação e mantém fallback para os Markdown incluídos no frontend. Nunca coloque segredos em variáveis `VITE_*`. A documentação bilíngue canônica está em [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets), em `public/docs/`.
+Builds de produção usam a variável pública `VITE_API_BASE_URL` para indicar a API. O leitor usa `https://docs.eduassets.tech` por padrão; `VITE_DOCS_BASE_URL` é uma substituição opcional da URL-base. Os Markdown incluídos no frontend só são usados se a requisição remota falhar ou retornar resposta sem sucesso. Nunca coloque segredos em variáveis `VITE_*`. A documentação bilíngue canônica está em [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets), em `public/docs/`.
 
 O frontend é implantado separadamente pelo pipeline Cloudflare Pages. Alterações somente do frontend não exigem pull, rebuild ou reinício da VM Oracle da API.

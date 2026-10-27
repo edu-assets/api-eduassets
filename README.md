@@ -50,6 +50,8 @@ cp .env.example backend/.env
 
 Set a disposable development `DATABASE_URL` and a unique `JWT_SECRET` of at least 32 random characters in `backend/.env`. Never use production credentials for local tests or commit an environment file. Apply migrations only to the intended development database, then run:
 
+The runtime contract also validates `HOST`, `PORT`/`BACKEND_PORT`, `CORS_ORIGIN`, and `TRUST_PROXY`; `DIRECT_URL` is optional and falls back to `DATABASE_URL`. See `backend/.env.example` and `backend/src/config/runtimeConfig.ts` for names and semantics. Do not put actual values in documentation.
+
 ```bash
 npm --prefix backend run migrate:deploy
 npm run dev

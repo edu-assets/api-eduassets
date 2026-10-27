@@ -49,6 +49,7 @@ cp .env.example backend/.env
 ```
 
 Defina em `backend/.env` uma `DATABASE_URL` de desenvolvimento descartável e um `JWT_SECRET` exclusivo com pelo menos 32 caracteres aleatórios. Nunca use credenciais de produção em testes locais nem faça commit de arquivos de ambiente. Aplique migrations somente ao banco de desenvolvimento pretendido e execute:
+O runtime também valida `HOST`, `PORT`/`BACKEND_PORT`, `CORS_ORIGIN` e `TRUST_PROXY`; `DIRECT_URL` é opcional e usa `DATABASE_URL` como fallback. Consulte `backend/.env.example` e `backend/src/config/runtimeConfig.ts` para nomes e semântica. Não inclua valores reais na documentação.
 
 ```bash
 npm --prefix backend run migrate:deploy
