@@ -4,7 +4,7 @@
   <img src="assets/eduAssets_banner.webp" alt="eduAssets — inventário e empréstimos de equipamentos escolares" width="100%">
 </div>
 
-[README em inglês](README.md) · [Frontend](frontend.md) · [Backend](backend.md) · [Repositório de documentação](https://github.com/edu-assets/docs-eduassets)
+[README em inglês](README.md) · [Frontend](frontend.md) · [Backend](backend.md) · [Repositório de documentação](https://github.com/edu-assets/docs-eduassets) · [Runbook de segurança e recuperação](deploy/SEGURANCA-E-OPERACOES.md)
 
 > **Status: Versão oficial 1.0.0.** O eduAssets é uma aplicação de inventário e empréstimo de equipamentos escolares. Frontend, backend, documentação e portfólio agora têm repositórios separados. Este README apresenta o produto como um todo; os guias detalhados e o histórico de versões são mantidos no repositório central de documentação.
 
@@ -68,7 +68,7 @@ npm run test:integration  # exige banco PostgreSQL isolado para testes
 
 ## Documentação e implantação
 
-Os guias bilíngues canônicos ficam em [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets). O modal Sobre mantém seu catálogo e renderizador no repositório do app e pode carregar o Markdown central quando a origem pública estiver configurada; cópias incluídas no frontend permanecem como fallback até validar a leitura remota em produção. Os procedimentos de implantação do backend, operação da VM, recuperação, API e arquitetura são referenciados pelo repositório de documentação.
+Os guias bilíngues canônicos ficam em [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets). O modal Sobre mantém seu catálogo e renderizador no repositório do app e pode carregar o Markdown central quando a origem pública estiver configurada; cópias incluídas no frontend permanecem como fallback até validar a leitura remota em produção. O [runbook de segurança e recuperação](deploy/SEGURANCA-E-OPERACOES.md) deste repositório cobre política de Administradores/RFID, restrição de origem, backups criptografados e o exercício local de restauração datado.
 
 O GitHub Actions valida o código e os templates de implantação; não publica o frontend, não reinicia a API e não reinicia a VM. Alterações somente de documentação ou frontend não exigem reinicialização da VM Oracle. Releases do backend seguem o procedimento documentado de atualização da API e normalmente não exigem reboot completo da VM.
 

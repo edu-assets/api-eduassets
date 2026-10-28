@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAdmin } from '../middlewares/auth.js';
 import { validateBody, requireIntParam } from '../middlewares/validate.js';
-import { usuarioCreateSchema } from '../schemas/index.js';
+import { usuarioCreateSchema, usuarioUpdateSchema, usuarioPasswordResetSchema } from '../schemas/index.js';
 import { rfidProvisionRateLimiter } from '../middlewares/security.js';
 import * as usuariosController from '../controllers/usuarios.controller.js';
 
@@ -12,6 +12,8 @@ usuariosRouter.use(requireAdmin);
 
 usuariosRouter.get('/', usuariosController.listar);
 usuariosRouter.post('/', validateBody(usuarioCreateSchema), usuariosController.criar);
+usuariosRouter.patch('/:id', requireIntParam('id'), validateBody(usuarioUpdateSchema), usuariosController.atualizar);
+usuariosRouter.post('/:id/password-reset', requireIntParam('id'), validateBody(usuarioPasswordResetSchema), usuariosController.resetarSenha);
 usuariosRouter.post(
   '/:id/rfid-token',
   requireIntParam('id'),

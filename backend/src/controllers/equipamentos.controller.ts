@@ -8,12 +8,12 @@ export async function listar(req: Request, res: Response): Promise<void> {
 }
 
 export async function criar(req: Request, res: Response): Promise<void> {
-  const criado = await equipamentosService.criarEquipamento(req.body);
+  const criado = await equipamentosService.criarEquipamento(req.body, req.user!.sub);
   res.status(201).json(criado);
 }
 
 export async function atualizar(req: Request, res: Response): Promise<void> {
   const id = Number(req.params.id);
-  const atualizado = await equipamentosService.atualizarEquipamento(id, req.body);
+  const atualizado = await equipamentosService.atualizarEquipamento(id, req.body, req.user!.sub);
   res.json(atualizado);
 }

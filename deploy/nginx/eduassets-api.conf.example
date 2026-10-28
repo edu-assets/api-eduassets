@@ -1,21 +1,20 @@
 # Template only. Install after supplying a valid origin certificate and verifying
 # the actual API hostname and refreshing the official Cloudflare IP ranges.
-# Cloudflare's current ranges must be maintained in the included file; do not
-# trust CF-Connecting-IP from arbitrary Internet clients.
+# The application port remains bound to loopback in Docker Compose. Do not expose
+# an origin port 80 listener; configure HTTPS at Cloudflare's edge instead.
 server {
     listen 443 ssl http2;
     server_name _; # Replace with the operator-verified API hostname before installation.
+
+    # The included file contains only `allow <Cloudflare CIDR>;` entries.
+    # The access module sees the original TCP peer because real_ip rewriting is not enabled.
+    include /etc/nginx/snippets/eduassets-cloudflare-allowlist.conf;
+    deny all;
 
     ssl_certificate     /etc/ssl/eduassets/origin-fullchain.pem;
     ssl_certificate_key /etc/ssl/eduassets/origin-private-key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     client_max_body_size 100k;
-
-    # Copy the reviewed deploy/nginx/eduassets-cloudflare-realip.conf.example here.
-    # Refresh from Cloudflare's official source before installation; never use 0.0.0.0/0.
-    include /etc/nginx/snippets/eduassets-cloudflare-realip.conf;
-    real_ip_header CF-Connecting-IP;
-    real_ip_recursive on;
 
     # RFID bridge/auth is reserved for the isolated local kiosk, never the public API.
     location ~* ^/auth/rfid(?:/|$) {
@@ -30,18 +29,13 @@ server {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        # Overwrite client-supplied forwarding values; Express trusts this one hop only.
-        proxy_set_header X-Forwarded-For $remote_addr;
+        # Only Cloudflare peers pass the allowlist; Cloudflare overwrites CF-Connecting-IP.
+        # Set TRUST_PROXY=1 in the API environment for this single trusted proxy hop.
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $http_cf_connecting_ip;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Connection "";
         proxy_read_timeout 30s;
         proxy_send_timeout 30s;
     }
-}
-
-server {
-    listen 80;
-    server_name _; # Replace with the operator-verified API hostname before installation.
-    return 301 https://$host$request_uri;
 }

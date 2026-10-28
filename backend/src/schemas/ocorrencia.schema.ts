@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { positiveDatabaseIdSchema } from './common.schema.js';
 
 export const ocorrenciaCreateSchema = z.object({
-  equipamentoId: z.number().int().positive('Equipamento inválido.'),
+  equipamentoId: positiveDatabaseIdSchema,
   tipo: z.enum(['OBSERVACAO', 'MANUTENCAO', 'QUEBRADO'], {
     message: 'Tipo de ocorrência inválido.',
   }),

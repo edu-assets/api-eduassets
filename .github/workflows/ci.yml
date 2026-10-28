@@ -4,9 +4,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -32,10 +36,10 @@ jobs:
       SEED_ADMIN_EMAIL: ci-admin@example.invalid
       SEED_ADMIN_PASSWORD: Synthetic-CI-Admin-Password-01
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22.13.0
+          node-version: 22.23.4
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --prefix backend
@@ -71,6 +75,18 @@ jobs:
         run: |
           grep -Fq 'location ~* ^/auth/rfid' deploy/nginx/eduassets-api.conf.example
           grep -Fq 'location ~* ^/ws/rfid' deploy/nginx/eduassets-api.conf.example
+          grep -Fq 'eduassets-cloudflare-allowlist.conf' deploy/nginx/eduassets-api.conf.example
+          grep -Fq 'deny all;' deploy/nginx/eduassets-api.conf.example
+          grep -Fq 'allow {cidr};' deploy/scripts/update-cloudflare-nginx-allowlist.sh
+          grep -Fq 'proxy_set_header X-Forwarded-For $http_cf_connecting_ip;' deploy/nginx/eduassets-api.conf.example
+          grep -Fq 'node:22.23.4-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d' backend/Dockerfile
+          bash -n deploy/scripts/update-cloudflare-nginx-allowlist.sh deploy/scripts/backup-postgres.sh deploy/scripts/restore-postgres-empty-db.sh
+          grep -Fq 'PGPASSFILE' deploy/scripts/backup-postgres.sh
+          grep -Fq 'age --recipient' deploy/scripts/backup-postgres.sh
+          grep -Fq 'rclone copyto' deploy/scripts/backup-postgres.sh
+          grep -Fq 'AGE_IDENTITY' deploy/scripts/restore-postgres-empty-db.sh
+          grep -Fq 'age --decrypt --identity' deploy/scripts/restore-postgres-empty-db.sh
+          grep -Fq 'Refusing restore: target database contains' deploy/scripts/restore-postgres-empty-db.sh
           cat > .env.production <<'EOF'
           DATABASE_URL=postgresql://synthetic:synthetic@127.0.0.1:5432/eduassets
           JWT_SECRET=synthetic-compose-validation-secret-0123456789abcdef
@@ -83,6 +99,7 @@ jobs:
 
   production-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -104,7 +121,7 @@ jobs:
       TRUST_PROXY: "0"
       RFID_BRIDGE_ENABLED: "false"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build production images
         run: |
           docker build --target runtime -t eduassets-backend:ci -f backend/Dockerfile backend

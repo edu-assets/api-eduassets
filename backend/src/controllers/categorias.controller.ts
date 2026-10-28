@@ -8,6 +8,6 @@ export async function listar(req: Request, res: Response): Promise<void> {
 
 export async function criar(req: Request, res: Response): Promise<void> {
   const { nome } = req.body;
-  const criada = await categoriasService.criarCategoria(nome);
+  const criada = await categoriasService.criarCategoria(nome, req.user!.sub);
   res.status(201).json(criada);
 }

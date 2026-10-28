@@ -1,4 +1,5 @@
 import { prisma, runTransaction } from '../lib/prisma.js';
+import { writeAuditLog } from '../lib/auditLog.js';
 import { AppError } from '../errors/AppError.js';
 import { decrementarComSeguranca } from './estoque.service.js';
 
@@ -28,7 +29,7 @@ export async function listarOcorrencias() {
   });
 }
 
-export async function criarOcorrencias(dados: OcorrenciaCreateInput) {
+export async function criarOcorrencias(dados: OcorrenciaCreateInput, actorId: number) {
   const { equipamentoId, tipo, problema, descricao, numeros } = dados;
   const quantidade = numeros.length;
 
@@ -38,12 +39,15 @@ export async function criarOcorrencias(dados: OcorrenciaCreateInput) {
     }
 
     const criadas = await Promise.all(
-      numeros.map((numero) =>
-        tx.ocorrencia.create({
+      numeros.map(async (numero) => {
+        const criada = await tx.ocorrencia.create({
           data: { equipamentoId, tipo, problema, descricao, numero },
           include: ocorrenciaInclude,
-        })
-      )
+        });
+        await writeAuditLog(tx, actorId, 'CREATE', 'Ocorrencia', criada.id,
+          ['equipamentoId', 'tipo', 'problema', 'descricao', 'numero']);
+        return criada;
+      })
     );
 
     if (tipo === 'QUEBRADO') {
@@ -57,22 +61,21 @@ export async function criarOcorrencias(dados: OcorrenciaCreateInput) {
   });
 }
 
-export async function atualizarOcorrencia(id: number, dados: OcorrenciaUpdateInput) {
+export async function atualizarOcorrencia(id: number, dados: OcorrenciaUpdateInput, actorId: number) {
   const { problema, descricao, numero, medidasTomadas } = dados;
 
-  return prisma.ocorrencia.update({
-    where: { id },
-    data: {
-      problema,
-      descricao,
-      numero,
-      ...(medidasTomadas !== undefined ? { medidasTomadas } : {}),
-    },
-    include: ocorrenciaInclude,
+  return runTransaction(async (tx) => {
+    const atualizada = await tx.ocorrencia.update({
+      where: { id },
+      data: { problema, descricao, numero, ...(medidasTomadas !== undefined ? { medidasTomadas } : {}) },
+      include: ocorrenciaInclude,
+    });
+    await writeAuditLog(tx, actorId, 'UPDATE', 'Ocorrencia', id, Object.keys(dados));
+    return atualizada;
   });
 }
 
-export async function resolverOcorrencia(id: number, medidasTomadas: string) {
+export async function resolverOcorrencia(id: number, medidasTomadas: string, actorId: number) {
   return runTransaction(async (tx) => {
     await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Ocorrencia" WHERE id = ${id} FOR UPDATE`;
     const ocorrenciaAtual = await tx.ocorrencia.findUnique({ where: { id } });
@@ -106,11 +109,14 @@ export async function resolverOcorrencia(id: number, medidasTomadas: string) {
       });
     }
 
+    await writeAuditLog(tx, actorId, 'RESOLVE', 'Ocorrencia', id,
+      ['status', 'resolvidoEm', 'medidasTomadas']);
+
     return resolvida;
   });
 }
 
-export async function excluirOcorrencia(id: number) {
+export async function excluirOcorrencia(id: number, actorId: number) {
   return runTransaction(async (tx) => {
     await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Ocorrencia" WHERE id = ${id} FOR UPDATE`;
     const ocorrencia = await tx.ocorrencia.findUnique({ where: { id } });
@@ -129,5 +135,7 @@ export async function excluirOcorrencia(id: number) {
     }
 
     await tx.ocorrencia.delete({ where: { id } });
+    await writeAuditLog(tx, actorId, 'DELETE', 'Ocorrencia', id,
+      ['equipamentoId', 'tipo', 'problema', 'descricao', 'numero', 'status', 'resolvidoEm', 'medidasTomadas']);
   });
 }

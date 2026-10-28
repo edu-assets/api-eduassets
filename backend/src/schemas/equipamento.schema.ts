@@ -1,16 +1,17 @@
 import { z } from 'zod';
+import { nonNegativeInventoryCountSchema, positiveDatabaseIdSchema, positiveInventoryCountSchema } from './common.schema.js';
 
 export const equipamentoCreateSchema = z.object({
-  categoriaId: z.number().int().positive('Categoria inválida.'),
+  categoriaId: positiveDatabaseIdSchema,
   modelo: z.string().trim().min(1, 'Modelo é obrigatório.').max(150),
-  quantidadeTotal: z.number().int().positive('Quantidade total deve ser positiva.'),
+  quantidadeTotal: positiveInventoryCountSchema,
 });
 
 export const equipamentoUpdateSchema = z
   .object({
-    quantidadeTotal: z.number().int().nonnegative().optional(),
-    quantidadeDisponivel: z.number().int().nonnegative().optional(),
-    quantidadeQuebrada: z.number().int().nonnegative().optional(),
+    quantidadeTotal: nonNegativeInventoryCountSchema.optional(),
+    quantidadeDisponivel: nonNegativeInventoryCountSchema.optional(),
+    quantidadeQuebrada: nonNegativeInventoryCountSchema.optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: 'Informe ao menos um campo para atualizar.',

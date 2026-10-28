@@ -39,14 +39,40 @@ model Responsavel {
 }
 
 model Usuario {
-  id           Int         @id @default(autoincrement())
-  nome         String
-  login        String      @unique
-  passwordHash String
-  nivelAcesso  NivelAcesso
-  sessionVersion Int      @default(0)
-  rfidTokenHash String?    @unique
-  createdAt    DateTime    @default(now())
+  id              Int         @id @default(autoincrement())
+  nome            String
+  login           String      @unique
+  passwordHash    String
+  nivelAcesso     NivelAcesso
+  ativo           Boolean     @default(true)
+  sessionVersion  Int         @default(0)
+  rfidTokenHash   String?     @unique
+  createdById     Int?
+  updatedById     Int?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  createdBy       Usuario?    @relation("UsuarioCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy       Usuario?    @relation("UsuarioUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdUsers    Usuario[]   @relation("UsuarioCreatedBy")
+  updatedUsers    Usuario[]   @relation("UsuarioUpdatedBy")
+  auditLogs       AuditLog[]
+
+  @@index([createdById])
+  @@index([updatedById])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actorId    Int
+  action     String   @db.VarChar(80)
+  entity     String   @db.VarChar(80)
+  entityId   String   @db.VarChar(120)
+  changedFields String[]
+  createdAt  DateTime @default(now())
+  actor      Usuario  @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId, createdAt])
+  @@index([entity, entityId, createdAt])
 }
 
 model Emprestimo {

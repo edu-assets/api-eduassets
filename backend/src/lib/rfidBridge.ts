@@ -1,19 +1,14 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import { createRfidLoginCode } from './rfidLoginCode.js';
+import { isTrustedOrigin } from '../middlewares/csrf.js';
+import { isRfidSocketRequestAllowed } from './rfidPolicy.js';
 
 interface RfidLoginEvent {
   token: string;
-  user: {
-    id: number;
-    nome: string;
-    login: string;
-    nivelAcesso: 'ADMINISTRADOR' | 'EDITOR';
-  };
 }
 
 let wss: WebSocketServer | null = null;
-const cookieModeClients = new WeakMap<WebSocket, boolean>();
 
 function ehLoopback(remoteAddress: string | undefined): boolean {
   if (!remoteAddress) return false;
@@ -24,14 +19,15 @@ export function initRfidBridge(server: Server): void {
   wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (req, socket, head) => {
-    let cookieMode = false;
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      if (url.pathname !== '/ws/rfid') {
+      const authMode = url.searchParams.get('auth');
+      const hasExpectedRouteAndMode = url.pathname === '/ws/rfid' && authMode === 'cookie';
+      const originTrusted = hasExpectedRouteAndMode && isTrustedOrigin(req.headers.origin);
+      if (!isRfidSocketRequestAllowed(url.pathname, authMode, originTrusted)) {
         socket.destroy();
         return;
       }
-      cookieMode = url.searchParams.get('auth') === 'cookie';
     } catch {
       socket.destroy();
       return;
@@ -44,7 +40,6 @@ export function initRfidBridge(server: Server): void {
     }
 
     wss!.handleUpgrade(req, socket, head, (ws) => {
-      cookieModeClients.set(ws, cookieMode);
       wss!.emit('connection', ws, req);
     });
   });
@@ -58,10 +53,6 @@ export function publicarLoginRfid(evento: RfidLoginEvent): void {
   if (!wss) return;
   wss.clients.forEach((client) => {
     if (client.readyState !== WebSocket.OPEN) return;
-    if (cookieModeClients.get(client)) {
-      client.send(JSON.stringify({ code: createRfidLoginCode(evento.token) }));
-    } else {
-      client.send(JSON.stringify(evento));
-    }
+    client.send(JSON.stringify({ code: createRfidLoginCode(evento.token) }));
   });
 }

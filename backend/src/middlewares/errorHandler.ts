@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import type { NextFunction, Request, Response } from 'express';
 import { logger } from '../lib/logger.js';
 import { AppError } from '../errors/AppError.js';
+import { sanitizeUrlForLog } from '../lib/logRedaction.js';
 
 const DATABASE_UNAVAILABLE_CODES = new Set(['P1000', 'P1001', 'P1002', 'P1017', 'P2024']);
 const DATABASE_SCHEMA_CODES = new Set(['P2021', 'P2022']);
@@ -19,6 +20,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
     next(err);
     return;
   }
+  const safePath = sanitizeUrlForLog(req.originalUrl);
 
   // Erro de parse de JSON malformado
   if (
@@ -42,7 +44,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
 
   // Erros conhecidos do Prisma
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    logger.warn(`Prisma known error [${err.code}] em ${req.method} ${req.originalUrl}: ${err.message}`);
+    logger.warn('Prisma known error', { code: err.code, method: req.method, path: safePath });
 
     const databaseError = classifyDatabaseError(err);
     if (databaseError === 'unavailable') {
@@ -64,6 +66,9 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
       case 'P2002':
         res.status(409).json({ erro: 'backend.geral.registro_duplicado' });
         return;
+      case 'P2034':
+        res.status(409).json({ erro: 'backend.emprestimos.conflito_concorrencia' });
+        return;
       default:
         res.status(400).json({ erro: 'backend.geral.erro_processar_requisicao' });
         return;
@@ -71,16 +76,13 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
   }
 
   if (err instanceof Prisma.PrismaClientInitializationError) {
-    logger.error(`Prisma não conseguiu inicializar em ${req.method} ${req.originalUrl}`, { error: err.message });
+    logger.error('Prisma initialization failure', { method: req.method, path: safePath, errorName: err.name });
     res.status(503).json({ erro: 'backend.geral.banco_indisponivel' });
     return;
   }
 
-  // Erros inesperados: loga stack completa, responde mensagem genérica segura
-  const erroFormatado = err instanceof Error
-    ? { message: err.message, stack: err.stack }
-    : { message: String(err) };
-
-  logger.error(`Erro não tratado em ${req.method} ${req.originalUrl}`, { error: erroFormatado });
+  // Do not log exception messages/stacks: drivers may include query or credential data.
+  const errorName = err instanceof Error ? err.name : 'UnknownError';
+  logger.error('Unexpected API error', { method: req.method, path: safePath, errorName });
   res.status(500).json({ erro: 'backend.geral.erro_interno' });
 }

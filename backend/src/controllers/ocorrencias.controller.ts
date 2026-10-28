@@ -8,25 +8,25 @@ export async function listar(req: Request, res: Response): Promise<void> {
 }
 
 export async function criar(req: Request, res: Response): Promise<void> {
-  const criadas = await ocorrenciasService.criarOcorrencias(req.body);
+  const criadas = await ocorrenciasService.criarOcorrencias(req.body, req.user!.sub);
   res.status(201).json(criadas);
 }
 
 export async function atualizar(req: Request, res: Response): Promise<void> {
   const id = Number(req.params.id);
-  const atualizada = await ocorrenciasService.atualizarOcorrencia(id, req.body);
+  const atualizada = await ocorrenciasService.atualizarOcorrencia(id, req.body, req.user!.sub);
   res.json(atualizada);
 }
 
 export async function resolver(req: Request, res: Response): Promise<void> {
   const id = Number(req.params.id);
   const { medidasTomadas } = req.body;
-  const resolvida = await ocorrenciasService.resolverOcorrencia(id, medidasTomadas);
+  const resolvida = await ocorrenciasService.resolverOcorrencia(id, medidasTomadas, req.user!.sub);
   res.json(resolvida);
 }
 
 export async function excluir(req: Request, res: Response): Promise<void> {
   const id = Number(req.params.id);
-  await ocorrenciasService.excluirOcorrencia(id);
+  await ocorrenciasService.excluirOcorrencia(id, req.user!.sub);
   res.status(204).send();
 }

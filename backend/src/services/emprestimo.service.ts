@@ -1,5 +1,6 @@
 import { prisma, runTransaction } from '../lib/prisma.js';
 import { AppError } from '../errors/AppError.js';
+import { writeAuditLog } from '../lib/auditLog.js';
 import {
   agruparQuantidades,
   validarEstoqueDisponivel,
@@ -35,7 +36,22 @@ export async function listarEmprestimos() {
   });
 }
 
-export async function criarEmprestimo(dados: EmprestimoCreateInput) {
+export async function listarPaginaPublicaEmprestimos(limit: number, cursor?: number) {
+  const registros = await prisma.emprestimo.findMany({
+    where: cursor === undefined ? undefined : { id: { lt: cursor } },
+    take: limit + 1,
+    include: {
+      responsavel: true,
+      itens: { include: { equipamento: { include: { categoria: true } } } },
+    },
+    orderBy: { id: 'desc' },
+  });
+  const hasMore = registros.length > limit;
+  const items = registros.slice(0, limit);
+  return { items, nextCursor: hasMore ? items.at(-1)?.id ?? null : null };
+}
+
+export async function criarEmprestimo(dados: EmprestimoCreateInput, actorId: number) {
   const { solicitanteNome, responsavelId, dataRetirada, observacao, itens } = dados;
   const dataRetiradaFinal = dataRetirada ? new Date(dataRetirada) : new Date();
 
@@ -60,12 +76,14 @@ export async function criarEmprestimo(dados: EmprestimoCreateInput) {
     });
 
     await decrementarComSeguranca(tx, quantidadesSolicitadas);
+    await writeAuditLog(tx, actorId, 'CREATE', 'Emprestimo', emprestimo.id,
+      ['solicitanteNome', 'responsavelId', 'dataRetirada', 'observacao', 'itens']);
 
     return emprestimo;
   });
 }
 
-export async function atualizarItensEmprestimo(id: number, itens: ItemEmprestimoInput[]) {
+export async function atualizarItensEmprestimo(id: number, itens: ItemEmprestimoInput[], actorId: number) {
   return runTransaction(async (tx) => {
     await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Emprestimo" WHERE id = ${id} FOR UPDATE`;
     const emprestimoAtual = await tx.emprestimo.findUnique({ where: { id } });
@@ -88,7 +106,7 @@ export async function atualizarItensEmprestimo(id: number, itens: ItemEmprestimo
 
     await validarEstoqueDisponivel(tx, quantidadesSolicitadas, quantidadesDevolvidas);
 
-    for (const item of itensAntigos as Array<{ equipamentoId: number; quantidade: number }>) {
+    for (const item of [...itensAntigos].sort((a, b) => a.equipamentoId - b.equipamentoId) as Array<{ equipamentoId: number; quantidade: number }>) {
       await tx.equipamento.update({
         where: { id: item.equipamentoId },
         data: { quantidadeDisponivel: { increment: item.quantidade } },
@@ -107,14 +125,16 @@ export async function atualizarItensEmprestimo(id: number, itens: ItemEmprestimo
 
     await decrementarComSeguranca(tx, quantidadesSolicitadas);
 
-    return tx.emprestimo.findUnique({
+    const atualizado = await tx.emprestimo.findUnique({
       where: { id },
       include: { responsavel: true, itens: { include: { equipamento: true } } },
     });
+    await writeAuditLog(tx, actorId, 'UPDATE', 'Emprestimo', id, ['itens']);
+    return atualizado;
   });
 }
 
-export async function devolverEmprestimo(id: number, dataDevolucao?: string) {
+export async function devolverEmprestimo(id: number, dataDevolucao: string | undefined, actorId: number) {
   return runTransaction(async (tx) => {
     await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Emprestimo" WHERE id = ${id} FOR UPDATE`;
     const emprestimoAtual = await tx.emprestimo.findUnique({ where: { id } });
@@ -136,12 +156,14 @@ export async function devolverEmprestimo(id: number, dataDevolucao?: string) {
       include: { itens: true },
     });
 
-    for (const item of emprestimo.itens) {
+    for (const item of [...emprestimo.itens].sort((a, b) => a.equipamentoId - b.equipamentoId)) {
       await tx.equipamento.update({
         where: { id: item.equipamentoId },
         data: { quantidadeDisponivel: { increment: item.quantidade } },
       });
     }
+
+    await writeAuditLog(tx, actorId, 'RETURN', 'Emprestimo', id, ['status', 'dataDevolucao']);
 
     return emprestimo;
   });

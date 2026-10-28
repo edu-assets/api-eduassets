@@ -17,6 +17,11 @@ const isLocalDevelopment = runtimeConfig.nodeEnv === 'development' &&
 app.set('trust proxy', runtimeConfig.trustProxy);
 
 app.use(securityHeaders);
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  next();
+});
 
 const allowedOrigins = runtimeConfig.corsOrigins;
 

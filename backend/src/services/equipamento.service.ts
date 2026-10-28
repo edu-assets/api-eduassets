@@ -1,4 +1,5 @@
 import { prisma, runTransaction } from '../lib/prisma.js';
+import { writeAuditLog } from '../lib/auditLog.js';
 import { AppError } from '../errors/AppError.js';
 
 export interface EquipamentoCreateInput {
@@ -20,21 +21,20 @@ export async function listarEquipamentos() {
   });
 }
 
-export async function criarEquipamento(dados: EquipamentoCreateInput) {
+export async function criarEquipamento(dados: EquipamentoCreateInput, actorId: number) {
   const { categoriaId, modelo, quantidadeTotal } = dados;
-
-  return prisma.equipamento.create({
-    data: {
-      categoriaId,
-      modelo,
-      quantidadeTotal,
-      quantidadeDisponivel: quantidadeTotal,
-    },
-    include: { categoria: true },
+  return runTransaction(async (tx) => {
+    const criado = await tx.equipamento.create({
+      data: { categoriaId, modelo, quantidadeTotal, quantidadeDisponivel: quantidadeTotal },
+      include: { categoria: true },
+    });
+    await writeAuditLog(tx, actorId, 'CREATE', 'Equipamento', criado.id,
+      ['categoriaId', 'modelo', 'quantidadeTotal', 'quantidadeDisponivel']);
+    return criado;
   });
 }
 
-export async function atualizarEquipamento(id: number, dados: EquipamentoUpdateInput) {
+export async function atualizarEquipamento(id: number, dados: EquipamentoUpdateInput, actorId: number) {
   const { quantidadeTotal, quantidadeDisponivel, quantidadeQuebrada } = dados;
 
   return runTransaction(async (tx) => {
@@ -63,10 +63,12 @@ export async function atualizarEquipamento(id: number, dados: EquipamentoUpdateI
       throw new AppError(409, 'backend.equipamentos.quantidade_em_uso');
     }
 
-    return tx.equipamento.update({
+    const atualizado = await tx.equipamento.update({
       where: { id },
       data: { quantidadeTotal, quantidadeDisponivel, quantidadeQuebrada },
       include: { categoria: true },
     });
+    await writeAuditLog(tx, actorId, 'UPDATE', 'Equipamento', id, Object.keys(dados));
+    return atualizado;
   });
 }

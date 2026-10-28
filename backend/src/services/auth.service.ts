@@ -5,6 +5,8 @@ import { AppError } from '../errors/AppError.js';
 import { hashRfidToken, safeCompareSecrets } from '../lib/rfidToken.js';
 import { publicarLoginRfid } from '../lib/rfidBridge.js';
 import { logger } from '../lib/logger.js';
+import { writeAuditLog } from '../lib/auditLog.js';
+import { assertRfidAllowedForAccount } from '../lib/rfidPolicy.js';
 
 const RFID_BRIDGE_SECRET = process.env.RFID_BRIDGE_SECRET;
 // Random per-process dummy hash prevents account existence from skipping bcrypt work.
@@ -40,6 +42,10 @@ export async function login(loginStr: string, password: string) {
   }
 
   if (!senhaValida) {
+    throw new AppError(401, 'backend.auth.credenciais_invalidas');
+  }
+
+  if (!usuario.ativo) {
     throw new AppError(401, 'backend.auth.credenciais_invalidas');
   }
 
@@ -82,19 +88,26 @@ export async function alterarSenha(usuarioId: number, senhaAtual: string, novaSe
   }
 
   const novoHash = await bcrypt.hash(novaSenha, 12);
-  const updated = await prisma.usuario.update({
-    where: { id: usuario.id },
-    data: { passwordHash: novoHash, sessionVersion: { increment: 1 } },
-    select: { id: true, nivelAcesso: true, sessionVersion: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    const changed = await tx.usuario.update({
+      where: { id: usuario.id },
+      data: { passwordHash: novoHash, sessionVersion: { increment: 1 } },
+      select: { id: true, nivelAcesso: true, sessionVersion: true },
+    });
+    await writeAuditLog(tx, usuario.id, 'PASSWORD_CHANGE', 'Usuario', usuario.id, ['passwordHash', 'sessionVersion']);
+    return changed;
   });
   // Reissue only the current session at the new version; other sessions are revoked.
   return signToken({ sub: updated.id, nivelAcesso: updated.nivelAcesso, sessionVersion: updated.sessionVersion });
 }
 
 export async function logout(usuarioId: number): Promise<void> {
-  await prisma.usuario.update({
-    where: { id: usuarioId },
-    data: { sessionVersion: { increment: 1 } },
+  await prisma.$transaction(async (tx) => {
+    await tx.usuario.update({
+      where: { id: usuarioId },
+      data: { sessionVersion: { increment: 1 } },
+    });
+    await writeAuditLog(tx, usuarioId, 'LOGOUT', 'Usuario', usuarioId, ['sessionVersion']);
   });
 }
 
@@ -117,15 +130,12 @@ export async function loginRfid(
     throw new AppError(401, 'backend.auth.cartao_nao_reconhecido');
   }
 
+  if (!usuario.ativo) {
+    throw new AppError(401, 'backend.auth.cartao_nao_reconhecido');
+  }
+  assertRfidAllowedForAccount(usuario.nivelAcesso);
+
   const jwtToken = signToken({ sub: usuario.id, nivelAcesso: usuario.nivelAcesso, sessionVersion: usuario.sessionVersion });
 
-  publicarLoginRfid({
-    token: jwtToken,
-    user: {
-      id: usuario.id,
-      nome: usuario.nome,
-      login: usuario.login,
-      nivelAcesso: usuario.nivelAcesso,
-    },
-  });
+  publicarLoginRfid({ token: jwtToken });
 }

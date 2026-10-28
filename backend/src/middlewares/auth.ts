@@ -46,12 +46,18 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   // Verifica se o usuário ainda existe no banco de dados e obtém o nível de acesso atual
   const usuario = await prisma.usuario.findUnique({
     where: { id: payload.sub },
-    select: { id: true, nivelAcesso: true, sessionVersion: true },
+    select: { id: true, nivelAcesso: true, sessionVersion: true, ativo: true },
   });
 
   if (!usuario) {
     if (usingCookie) clearSessionCookie(req, res);
     res.status(401).json({ erro: 'backend.auth.usuario_nao_existe' });
+    return;
+  }
+
+  if (!usuario.ativo) {
+    if (usingCookie) clearSessionCookie(req, res);
+    res.status(401).json({ erro: 'backend.auth.usuario_inativo' });
     return;
   }
 

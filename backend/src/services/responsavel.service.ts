@@ -1,4 +1,5 @@
-import { prisma } from '../lib/prisma.js';
+import { prisma, runTransaction } from '../lib/prisma.js';
+import { writeAuditLog } from '../lib/auditLog.js';
 
 export async function listarResponsaveis() {
   return prisma.responsavel.findMany({
@@ -6,8 +7,10 @@ export async function listarResponsaveis() {
   });
 }
 
-export async function criarResponsavel(nome: string, cargo: string) {
-  return prisma.responsavel.create({
-    data: { nome, cargo },
+export async function criarResponsavel(nome: string, cargo: string, actorId: number) {
+  return runTransaction(async (tx) => {
+    const criado = await tx.responsavel.create({ data: { nome, cargo } });
+    await writeAuditLog(tx, actorId, 'CREATE', 'Responsavel', criado.id, ['nome', 'cargo']);
+    return criado;
   });
 }

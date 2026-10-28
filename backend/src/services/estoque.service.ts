@@ -28,7 +28,7 @@ export function agruparQuantidades(
   for (const item of itens) {
     mapa.set(item.equipamentoId, (mapa.get(item.equipamentoId) ?? 0) + item.quantidade);
   }
-  return mapa;
+  return new Map([...mapa.entries()].sort(([idA], [idB]) => idA - idB));
 }
 
 export async function validarEstoqueDisponivel(
@@ -36,7 +36,7 @@ export async function validarEstoqueDisponivel(
   quantidadesSolicitadas: Map<number, number>,
   quantidadesDevolvidas: Map<number, number> = new Map()
 ): Promise<void> {
-  const equipamentoIds = [...quantidadesSolicitadas.keys()];
+  const equipamentoIds = [...quantidadesSolicitadas.keys()].sort((a, b) => a - b);
 
   const equipamentos = await tx.equipamento.findMany({
     where: { id: { in: equipamentoIds } },
@@ -96,7 +96,7 @@ export async function decrementarComSeguranca(
 ): Promise<void> {
   const falhas: number[] = [];
 
-  for (const [equipamentoId, quantidade] of quantidadesSolicitadas) {
+  for (const [equipamentoId, quantidade] of [...quantidadesSolicitadas.entries()].sort(([idA], [idB]) => idA - idB)) {
     const ok = await decrementarDisponivelAtomic(tx, equipamentoId, quantidade);
     if (!ok) falhas.push(equipamentoId);
   }

@@ -4,7 +4,7 @@
   <img src="assets/eduAssets_banner.webp" alt="eduAssets — school equipment inventory and loans" width="100%">
 </div>
 
-[Português](README_PT.md) · [Frontend](frontend.md) · [Backend](backend.md) · [Documentation repository](https://github.com/edu-assets/docs-eduassets)
+[Português](README_PT.md) · [Frontend](frontend.md) · [Backend](backend.md) · [Documentation repository](https://github.com/edu-assets/docs-eduassets) · [Security and recovery runbook](deploy/SECURITY-OPERATIONS.md)
 
 > **Status: Official version 1.0.0.** eduAssets is a school-equipment inventory and loan-management application. Its frontend, backend, documentation, and portfolio now have separate repositories. This README describes the product as a whole; the detailed guides and release history are maintained in the central documentation repository.
 
@@ -69,7 +69,7 @@ npm run test:integration  # requires an isolated PostgreSQL test database
 
 ## Documentation and deployment
 
-The canonical bilingual guides live in [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets). The frontend About modal keeps its catalog and renderer in the app repository and can load the central Markdown when its public source is configured; bundled copies remain as a fallback until remote access is verified in production. Backend deployment, VM operations, recovery, API, and architecture procedures are linked from the documentation repository.
+The canonical bilingual guides live in [`docs-eduassets`](https://github.com/edu-assets/docs-eduassets). The frontend About modal keeps its catalog and renderer in the app repository and can load the central Markdown when its public source is configured; bundled copies remain as a fallback until remote access is verified in production. This repository's [security and recovery runbook](deploy/SECURITY-OPERATIONS.md) covers the administrator/RFID policy, origin restrictions, encrypted backup, and the dated local restore drill.
 
 GitHub Actions validates code and deployment templates; it does not deploy the frontend, restart the API, or reboot the VM. Ordinary documentation or frontend-only changes do not require an Oracle VM restart. Backend releases use the documented API deployment procedure and do not normally require a full VM reboot.
 

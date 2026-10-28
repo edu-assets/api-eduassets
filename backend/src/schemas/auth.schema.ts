@@ -1,13 +1,15 @@
 import { z } from 'zod';
 
+const senhaAte72Bytes = (senha: string): boolean => Buffer.byteLength(senha, 'utf8') <= 72;
+
 export const loginSchema = z.object({
   login: z.string().trim().toLowerCase().min(1, 'Login é obrigatório.').max(200),
-  password: z.string().min(1, 'Senha é obrigatória.').max(200),
+  password: z.string().min(1, 'Senha é obrigatória.').max(200).refine(senhaAte72Bytes, 'A senha deve ter no máximo 72 bytes em UTF-8.'),
 });
 
 export const alterarSenhaSchema = z.object({
-  senhaAtual: z.string().min(1, 'Informe a senha atual.').max(200),
-  novaSenha: z.string().min(12, 'A nova senha deve ter no mínimo 12 caracteres.').max(200),
+  senhaAtual: z.string().min(1, 'Informe a senha atual.').max(200).refine(senhaAte72Bytes, 'A senha deve ter no máximo 72 bytes em UTF-8.'),
+  novaSenha: z.string().min(12, 'A nova senha deve ter no mínimo 12 caracteres.').max(200).refine(senhaAte72Bytes, 'A senha deve ter no máximo 72 bytes em UTF-8.'),
 });
 
 export const rfidScanSchema = z.object({
