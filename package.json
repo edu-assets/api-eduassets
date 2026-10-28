@@ -1,6 +1,6 @@
 {
   "name": "eduassets-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Backend API for the eduAssets school equipment inventory and loan application",
   "scripts": {
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/edu-assets/eduAssets.git"
+    "url": "git+https://github.com/edu-assets/api-eduassets.git"
   },
   "license": "MIT",
   "engines": {

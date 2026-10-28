@@ -6,7 +6,7 @@
 
 [README em inglês](README.md) · [Frontend](frontend.md) · [Backend](backend.md) · [Repositório de documentação](https://github.com/edu-assets/docs-eduassets) · [Runbook de segurança e recuperação](deploy/SEGURANCA-E-OPERACOES.md)
 
-> **Status: Versão oficial 1.0.0.** O eduAssets é uma aplicação de inventário e empréstimo de equipamentos escolares. Frontend, backend, documentação e portfólio agora têm repositórios separados. Este README apresenta o produto como um todo; os guias detalhados e o histórico de versões são mantidos no repositório central de documentação.
+> **Status: Versão oficial 1.0.1.** O eduAssets é uma aplicação de inventário e empréstimo de equipamentos escolares. Frontend, backend, documentação e portfólio agora têm repositórios separados. Este README apresenta o produto como um todo; os guias detalhados e o histórico de versões são mantidos no repositório central de documentação.
 
 ## Visão geral
 
@@ -17,7 +17,7 @@ A aplicação oferece empréstimos e devoluções de equipamentos, consultas de 
 | Repositório | Responsabilidade |
 | --- | --- |
 | [`edu-assets/app-eduassets`](https://github.com/edu-assets/app-eduassets) | Aplicação frontend, tela inicial de login, painel Sobre/modal de documentação e build do Cloudflare Pages. |
-| [`edu-assets/eduAssets`](https://github.com/edu-assets/eduAssets) | API backend, integração Prisma/PostgreSQL, bridge RFID opcional e templates de implantação. Este repositório. |
+| [`edu-assets/api-eduassets`](https://github.com/edu-assets/api-eduassets) | API backend, integração Prisma/PostgreSQL, bridge RFID opcional e templates de implantação. Este repositório. |
 | [`edu-assets/docs-eduassets`](https://github.com/edu-assets/docs-eduassets) | Documentação canônica bilíngue em Markdown e PDF, compartilhada entre os projetos. |
 | [`edu-assets/site-eduAssets`](https://github.com/edu-assets/site-eduAssets) | Site público do portfólio e visão geral do projeto. |
 
@@ -35,7 +35,7 @@ API Node.js / Express ── PostgreSQL
 Leitor/bridge RFID local opcional ── endpoints RFID restritos do backend
 ```
 
-A API é a fronteira de segurança. O navegador negocia cookies de sessão `HttpOnly` e `SameSite=Lax` quando suportados; em HTTPS de produção, os cookies usam `Secure` e o prefixo `__Host-`. Alterações autenticadas por cookie exigem `Origin` confiável. Respostas de Convidado usam allowlists minimizadas no servidor, e as permissões de escrita são aplicadas nas rotas do backend. O fluxo RFID opcional fica desabilitado ou bloqueado na implantação pública por padrão.
+A API é a fronteira de segurança. O app no navegador usa sessões exclusivamente por cookie (`HttpOnly`, `SameSite=Lax`, `Secure` em HTTPS de produção e prefixo `__Host-`) e nunca persiste JWT em `localStorage`; se não confirmar suporte à sessão por cookie, o login falha fechado. A API ainda aceita Bearer para clientes legados não-browser, não como fallback do app. Alterações autenticadas por cookie exigem `Origin` confiável. Respostas de Convidado usam allowlists minimizadas no servidor, e as permissões de escrita são aplicadas nas rotas do backend. O fluxo RFID opcional fica desabilitado ou bloqueado na implantação pública por padrão.
 
 A topologia acima corresponde ao desenho de implantação documentado; esta alteração de repositório não inspeciona, reinicia nem modifica a VM Oracle ou serviços hospedados.
 

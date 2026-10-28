@@ -6,7 +6,7 @@
 
 [Português](README_PT.md) · [Frontend](frontend.md) · [Backend](backend.md) · [Documentation repository](https://github.com/edu-assets/docs-eduassets) · [Security and recovery runbook](deploy/SECURITY-OPERATIONS.md)
 
-> **Status: Official version 1.0.0.** eduAssets is a school-equipment inventory and loan-management application. Its frontend, backend, documentation, and portfolio now have separate repositories. This README describes the product as a whole; the detailed guides and release history are maintained in the central documentation repository.
+> **Status: Official version 1.0.1.** eduAssets is a school-equipment inventory and loan-management application. Its frontend, backend, documentation, and portfolio now have separate repositories. This README describes the product as a whole; the detailed guides and release history are maintained in the central documentation repository.
 
 ## Overview
 
@@ -17,7 +17,7 @@ The application supports equipment loans and returns, stock/history views, equip
 | Repository | Responsibility |
 | --- | --- |
 | [`edu-assets/app-eduassets`](https://github.com/edu-assets/app-eduassets) | Frontend application, login gate, in-app About/documentation modal, and Cloudflare Pages build. |
-| [`edu-assets/eduAssets`](https://github.com/edu-assets/eduAssets) | Backend API, Prisma/PostgreSQL integration, optional RFID bridge, and deployment templates. This repository. |
+| [`edu-assets/api-eduassets`](https://github.com/edu-assets/api-eduassets) | Backend API, Prisma/PostgreSQL integration, optional RFID bridge, and deployment templates. This repository. |
 | [`edu-assets/docs-eduassets`](https://github.com/edu-assets/docs-eduassets) | Canonical bilingual Markdown and PDF documentation shared by the projects. |
 | [`edu-assets/site-eduAssets`](https://github.com/edu-assets/site-eduAssets) | Public portfolio and project overview site. |
 
@@ -35,7 +35,7 @@ Node.js / Express API ── PostgreSQL
 Optional local RFID reader/bridge ── restricted backend RFID endpoints
 ```
 
-The API is the security boundary. The browser negotiates `HttpOnly`, `SameSite=Lax` session cookies when supported; production HTTPS cookies use `Secure` and the `__Host-` prefix. Cookie-authenticated mutations require a trusted `Origin`. Guest responses use minimized server-side allowlists, and write permissions are enforced in backend routes. The optional RFID flow is disabled or blocked in the public deployment by default.
+The API is the security boundary. The browser application uses cookie-only sessions (`HttpOnly`, `SameSite=Lax`, `Secure` over production HTTPS, with the `__Host-` prefix) and never persists JWTs in `localStorage`; failure to confirm cookie-session capability fails closed. The API still accepts Bearer authentication for legacy non-browser clients, not as a browser fallback. Cookie-authenticated mutations require a trusted `Origin`. Guest responses use minimized server-side allowlists, and write permissions are enforced in backend routes. The optional RFID flow is disabled or blocked in the public deployment by default.
 
 The topology above reflects the documented deployment design; this repository change does not inspect, restart, or otherwise modify the Oracle VM or hosted services.
 

@@ -2,7 +2,7 @@
 
 ## English
 
-The backend repository (`edu-assets/eduAssets`) contains the Node.js/TypeScript API, Express routes and middleware, Prisma schema/migrations, and optional RFID/device support. The root `npm run dev`, `npm run build`, and `npm test` scripts target the backend only.
+The backend repository (`edu-assets/api-eduassets`) contains the Node.js/TypeScript API, Express routes and middleware, Prisma schema/migrations, and optional RFID/device support. The root `npm run dev`, `npm run build`, and `npm test` scripts target the backend only.
 
 ### Local setup
 
@@ -32,7 +32,7 @@ The reference Compose service binds the published API to VM loopback, keeps RFID
 
 ## Português
 
-O repositório backend (`edu-assets/eduAssets`) contém a API Node.js/TypeScript, rotas e middlewares Express, schema/migrations Prisma e suporte opcional a RFID/dispositivos. Os scripts raiz `npm run dev`, `npm run build` e `npm test` atuam somente no backend.
+O repositório backend (`edu-assets/api-eduassets`) contém a API Node.js/TypeScript, rotas e middlewares Express, schema/migrations Prisma e suporte opcional a RFID/dispositivos. Os scripts raiz `npm run dev`, `npm run build` e `npm test` atuam somente no backend.
 
 ### Configuração local
 
