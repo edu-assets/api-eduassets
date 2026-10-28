@@ -9,6 +9,7 @@ import { prisma } from '../src/lib/prisma.js';
 const marker = `it-${Date.now()}-${process.pid}`;
 const login = `${marker}@example.invalid`;
 const password = 'Synthetic-Integration-Password-01';
+const integrationOrigin = process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).find(Boolean) ?? 'http://127.0.0.1';
 const rows: { categoryId?: number; responsibleId?: number; equipmentId?: number; secondEquipmentId?: number; userId?: number; targetUserId?: number; loanIds: number[]; occurrenceIds: number[] } = { loanIds: [], occurrenceIds: [] };
 let server: Server;
 let baseUrl: string;
@@ -23,7 +24,7 @@ async function api(path: string, init: RequestInit = {}, cookie?: string): Promi
     ...init,
     headers: {
       'content-type': 'application/json',
-      origin: 'http://127.0.0.1',
+      origin: integrationOrigin,
       ...(cookie ? { cookie } : {}),
       ...init.headers,
     },
