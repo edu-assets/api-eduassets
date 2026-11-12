@@ -2,10 +2,34 @@ import type { Request, Response } from 'express';
 import * as authService from '../services/auth.service.js';
 import { clearSessionCookie, setSessionCookie } from '../lib/sessionCookie.js';
 import { consumeRfidLoginCode } from '../lib/rfidLoginCode.js';
+import { isMailConfigured } from '../lib/mailer.js';
+import { logger } from '../lib/logger.js';
+import * as passwordRecovery from '../services/passwordRecovery.service.js';
 
 export function sessionCapabilities(_req: Request, res: Response): void {
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ cookieSession: true });
+  res.json({ cookieSession: true, passwordRecovery: isMailConfigured() });
+}
+
+/** Always 202 with the same body, answered before any lookup, so the response never reveals whether the account exists. */
+export async function solicitarRecuperacaoSenha(req: Request, res: Response): Promise<void> {
+  if (!isMailConfigured()) {
+    res.status(503).json({ erro: 'backend.auth.recuperacao_indisponivel' });
+    return;
+  }
+  const { login, idioma } = req.body;
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(202).json({ mensagem: 'backend.auth.recuperacao_solicitada' });
+  passwordRecovery.solicitarRecuperacao(login, idioma).catch((error: unknown) => {
+    logger.error('Falha ao processar pedido de recuperação de senha.', { error: error instanceof Error ? error.message : 'erro desconhecido' });
+  });
+}
+
+export async function redefinirSenhaComToken(req: Request, res: Response): Promise<void> {
+  const { token, senha } = req.body;
+  await passwordRecovery.redefinirSenhaComToken(token, senha);
+  clearSessionCookie(req, res);
+  res.status(204).send();
 }
 
 export async function login(req: Request, res: Response): Promise<void> {

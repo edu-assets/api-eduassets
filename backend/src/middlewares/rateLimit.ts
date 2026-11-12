@@ -41,6 +41,35 @@ export const loginIpRateLimiter = rateLimit({
   message: { erro: 'backend.seguranca.muitas_tentativas_login' },
 });
 
+/** Recovery emails: per IP, plus per account so one address cannot be flooded with messages. */
+export const passwordRecoveryIpRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { erro: 'backend.seguranca.muitas_solicitacoes_recuperacao' },
+});
+
+export const passwordRecoveryAccountRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  keyGenerator: (req) => {
+    const login = typeof req.body?.login === 'string' ? req.body.login.trim().toLowerCase() : '';
+    return `recovery:${createHash('sha256').update(login).digest('hex')}`;
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { erro: 'backend.seguranca.muitas_solicitacoes_recuperacao' },
+});
+
+export const passwordResetRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { erro: 'backend.seguranca.muitas_tentativas_senha' },
+});
+
 export const rfidLoginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 60,

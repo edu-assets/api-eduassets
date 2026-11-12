@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { senhaForte } from './usuario.schema.js';
 
 const senhaAte72Bytes = (senha: string): boolean => Buffer.byteLength(senha, 'utf8') <= 72;
 
@@ -19,6 +20,16 @@ export const rfidScanSchema = z.object({
 export const rfidSessionSchema = z.object({
   code: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Código de sessão RFID inválido.'),
 });
+
+export const solicitarRecuperacaoSchema = z.object({
+  login: z.string().trim().toLowerCase().min(1, 'Informe o e-mail.').max(200),
+  idioma: z.enum(['pt', 'en']).optional(),
+}).strict();
+
+export const redefinirSenhaTokenSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Link de recuperação inválido.'),
+  senha: z.string().max(200).refine(senhaForte, 'A senha deve ter 12 ou mais caracteres fortes e no máximo 72 bytes em UTF-8.'),
+}).strict();
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type AlterarSenhaInput = z.infer<typeof alterarSenhaSchema>;

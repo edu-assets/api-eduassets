@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Host-side health check for the eduAssets VM (run by a systemd timer every 5 minutes).
-# Checks disk, memory, the API container health and the age of the newest local backup.
+# Checks disk, memory, the API container health, the API HTTP 5xx rate and the age of the newest local backup.
 # The container is restarted only after it stays "unhealthy" for UNHEALTHY_RESTART_AFTER consecutive
 # runs, because Docker's `restart: unless-stopped` does not act on healthcheck status.
 # Optional dead-man switch: HEALTH_PING_URL (healthchecks.io-style) receives <url> or <url>/fail.
@@ -14,6 +14,10 @@ MEM_MIN_AVAILABLE_MB="${MEM_MIN_AVAILABLE_MB:-150}"
 BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-26}"
 UNHEALTHY_RESTART_AFTER="${UNHEALTHY_RESTART_AFTER:-3}"
 STATE_DIR="${STATE_DIR:-/var/lib/eduassets-health}"
+# Alert when, since the previous run, at least ERROR_5XX_MIN_COUNT responses were 5xx AND they were at least
+# ERROR_5XX_MAX_PERCENT of the requests (both conditions, so one error on a quiet VM does not page anyone).
+ERROR_5XX_MIN_COUNT="${ERROR_5XX_MIN_COUNT:-5}"
+ERROR_5XX_MAX_PERCENT="${ERROR_5XX_MAX_PERCENT:-5}"
 
 problems=()
 note() { printf '%s\n' "$1"; }
@@ -53,6 +57,36 @@ else
     echo 0 > "$counter_file"
     note "API container health: $health"
   fi
+
+  # --- HTTP 5xx rate, from the API request log (morgan -> winston JSON on stdout) since the last run ---
+  since_file="$STATE_DIR/last-log-check"
+  now="$(date +%s)"
+  since="$(cat -- "$since_file" 2>/dev/null || echo $((now - 300)))"
+  [[ "$since" =~ ^[0-9]+$ ]] && ((since > now - 3600)) || since=$((now - 300))
+  if counts="$(docker logs --since "$since" --until "$now" "$container" 2>&1 | awk '
+      match($0, /"message":"[^"]*"/) {
+        n = split(substr($0, RSTART + 11, RLENGTH - 12), f, " ")
+        if (n < 4 || f[2] !~ /^[A-Z]+$/ || f[4] !~ /^[1-5][0-9][0-9]$/) next
+        if (f[3] ~ /^\/(health|ready)([?]|$)/) next   # container healthcheck traffic
+        total++; if (f[4] ~ /^5/) errors++
+      }
+      END { print total + 0, errors + 0 }')"; then
+    echo "$now" > "$since_file"
+    read -r requests errors_5xx <<< "$counts"
+    percent=$(( requests > 0 ? errors_5xx * 100 / requests : 0 ))
+    if ((errors_5xx >= ERROR_5XX_MIN_COUNT && percent >= ERROR_5XX_MAX_PERCENT)); then
+      problem "API returned $errors_5xx HTTP 5xx of $requests requests (${percent}%) since the last check"
+    else
+      note "API requests since last check: $requests, 5xx: $errors_5xx"
+    fi
+  else
+    problem 'could not read API logs'
+  fi
+fi
+
+# --- automatic deployment (eduassets-deploy.timer, when enabled) ---
+if systemctl is-failed --quiet eduassets-deploy.service 2>/dev/null; then
+  problem 'last automatic deployment failed (journalctl -u eduassets-deploy)'
 fi
 
 # --- backup freshness ---

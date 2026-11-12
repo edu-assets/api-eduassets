@@ -37,9 +37,11 @@ Configure controles de acesso, retenção/versionamento e monitoramento do prove
 
 - `scripts/run-scheduled-backup.sh` + `systemd/eduassets-backup.{service,timer}`: backup diário às 06:30 UTC, lendo `/etc/eduassets/backup.env` (modo `0600`; modelo em `systemd/backup.env.example`), seguido de `scripts/prune-backups.sh` (7 dias locais, 30 dias no remoto, nunca apaga se houver menos de 3 cópias recentes). `BACKUP_PING_URL` opcional para alerta por dead-man switch.
 - `scripts/vm-health-check.sh` + `systemd/eduassets-healthcheck.{service,timer}`: a cada 5 minutos verifica disco, memória, saúde do container `api` (reinicia após 3 verificações `unhealthy` seguidas) e idade do backup local (limite 26 h). `HEALTH_PING_URL` opcional.
+- `scripts/vm-health-check.sh` também alerta quando, desde a execução anterior, houve pelo menos 5 respostas HTTP 5xx representando 5% ou mais das requisições da API (lidas com `docker logs`, sem o tráfego de `/health` e `/ready`; limites `ERROR_5XX_MIN_COUNT` e `ERROR_5XX_MAX_PERCENT`) e quando o último deploy automático falhou.
 - `scripts/public-uptime-check.sh` + `.github/workflows/uptime.yml`: verificação externa a cada 15 minutos de `/health`, `/ready`, app, landing page, documentação, validade TLS e `security.txt`.
+- `scripts/auto-deploy.sh` + `systemd/eduassets-deploy.{service,timer}`: deploy por pull a cada 5 minutos. Implanta o `origin/main` só quando os jobs `verify` e `production-smoke` passaram para o commit; faz backup e roda o serviço `migrate` apenas quando há migrations novas; reverte código e imagem se a API não ficar `healthy` em 180 s e não repete um commit que falhou (`/var/lib/eduassets-deploy/failed-sha`). Rollback não desfaz migrations. Configuração opcional em `/etc/eduassets/deploy.env` (modelo `systemd/deploy.env.example`).
 
-Os passos de instalação na VM estão no Guia de Hospedagem central (§10 e §11).
+Os passos de instalação na VM estão no Guia de Hospedagem central (§5.1, §5.2, §10 e §11).
 
 ## Exercício seguro de restauração
 

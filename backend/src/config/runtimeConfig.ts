@@ -62,6 +62,18 @@ export function getRuntimeConfig(env: NodeJS.ProcessEnv = process.env) {
   if (env.RFID_BRIDGE_ENABLED === 'true' && (!env.RFID_BRIDGE_SECRET || env.RFID_BRIDGE_SECRET.length < 32)) {
     throw new Error('RFID_BRIDGE_SECRET deve conter pelo menos 32 caracteres quando RFID_BRIDGE_ENABLED=true.');
   }
+  const mailVariables = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'] as const;
+  const configuredMail = mailVariables.filter((name) => env[name]?.trim());
+  if (configuredMail.length && configuredMail.length < mailVariables.length) {
+    throw new Error(`Configuração de e-mail incompleta: defina ${mailVariables.filter((name) => !env[name]?.trim()).join(', ')}.`);
+  }
+  if (env.SMTP_PORT?.trim()) parsePort(env.SMTP_PORT.trim(), 'SMTP_PORT');
+  if (env.APP_PUBLIC_URL?.trim()) {
+    let parsed: URL;
+    try { parsed = new URL(env.APP_PUBLIC_URL.trim()); } catch { throw new Error('APP_PUBLIC_URL deve ser uma URL HTTP(S) válida.'); }
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.search || parsed.hash) throw new Error('APP_PUBLIC_URL deve ser uma URL HTTP(S) sem query ou fragmento.');
+    if (nodeEnv === 'production' && parsed.protocol !== 'https:') throw new Error('APP_PUBLIC_URL deve usar HTTPS em produção.');
+  }
   if (nodeEnv === 'production') {
     if (!env.JWT_SECRET || env.JWT_SECRET.length < 32) throw new Error('JWT_SECRET é obrigatório em produção e deve conter pelo menos 32 caracteres.');
     if (!env.DATABASE_URL) throw new Error('DATABASE_URL é obrigatório em produção.');

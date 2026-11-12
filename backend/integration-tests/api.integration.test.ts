@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import { after, before, test } from 'node:test';
 import { app } from '../src/app.js';
 import { prisma } from '../src/lib/prisma.js';
+import { setMailSenderForTests, type MailMessage } from '../src/lib/mailer.js';
 
 const marker = `it-${Date.now()}-${process.pid}`;
 const login = `${marker}@example.invalid`;
@@ -333,4 +334,56 @@ test('simultaneous occurrence resolution changes inventory exactly once', async 
   const equipment = await prisma.equipamento.findUniqueOrThrow({ where: { id: rows.equipmentId } });
   assert.equal(equipment.quantidadeDisponivel, 10);
   assert.equal(equipment.quantidadeQuebrada, 0);
+});
+
+test('self-service password recovery sends a single-use link and revokes existing sessions', async () => {
+  const recoveryLogin = `${marker}-recovery@example.invalid`;
+  const user = await prisma.usuario.create({
+    data: { nome: 'Synthetic <Recovery> User', login: recoveryLogin, passwordHash: await bcrypt.hash(password, 4), nivelAcesso: 'EDITOR' },
+  });
+  const sent: MailMessage[] = [];
+  setMailSenderForTests(async (message) => { sent.push(message); });
+  try {
+    const before = await api('/auth/login', json('POST', { login: recoveryLogin, password }));
+    assert.equal(before.status, 200);
+
+    const capabilities = await api('/auth/session-capabilities');
+    assert.equal(capabilities.body.passwordRecovery, true);
+
+    const unknown = await api('/auth/senha/recuperar', json('POST', { login: `${marker}-nobody@example.invalid` }));
+    const known = await api('/auth/senha/recuperar', json('POST', { login: recoveryLogin.toUpperCase(), idioma: 'en' }));
+    assert.equal(unknown.status, 202);
+    assert.equal(known.status, 202);
+    assert.deepEqual(unknown.body, known.body, 'responses must not reveal whether the account exists');
+
+    for (let i = 0; i < 50 && sent.length === 0; i++) await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].to, recoveryLogin);
+    assert.match(sent[0].subject, /password reset/);
+    assert.match(sent[0].html, /Synthetic &lt;Recovery&gt; User/);
+    const token = /#redefinir-senha=([A-Za-z0-9_-]{43})/.exec(sent[0].text)?.[1];
+    assert.ok(token, 'email must contain a reset link');
+    const stored = await prisma.passwordResetToken.findMany({ where: { usuarioId: user.id } });
+    assert.equal(stored.length, 1);
+    assert.notEqual(stored[0].tokenHash, token, 'only the token hash may be stored');
+
+    const weak = await api('/auth/senha/redefinir', json('POST', { token, senha: 'weak' }));
+    assert.equal(weak.status, 400);
+    const newPassword = 'Synthetic-Recovered-Password-02';
+    const reset = await api('/auth/senha/redefinir', json('POST', { token, senha: newPassword }));
+    assert.equal(reset.status, 204);
+    const reused = await api('/auth/senha/redefinir', json('POST', { token, senha: 'Synthetic-Another-Password-03' }));
+    assert.equal(reused.status, 400);
+    assert.equal(reused.body.erro, 'backend.auth.link_recuperacao_invalido');
+
+    assert.equal((await api('/auth/me', {}, before.sessionCookie)).status, 401, 'existing sessions must be revoked');
+    assert.equal((await api('/auth/login', json('POST', { login: recoveryLogin, password }))).status, 401);
+    assert.equal((await api('/auth/login', json('POST', { login: recoveryLogin, password: newPassword }))).status, 200);
+    const actions = (await prisma.auditLog.findMany({ where: { actorId: user.id } })).map((row) => row.action).sort();
+    assert.deepEqual(actions.filter((action) => action.startsWith('PASSWORD_')), ['PASSWORD_RESET_REQUEST', 'PASSWORD_RESET_SELF']);
+  } finally {
+    setMailSenderForTests(null);
+    await prisma.auditLog.deleteMany({ where: { actorId: user.id } });
+    await prisma.usuario.delete({ where: { id: user.id } });
+  }
 });

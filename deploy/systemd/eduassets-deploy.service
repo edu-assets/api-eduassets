@@ -1,0 +1,14 @@
+[Unit]
+Description=eduAssets API pull-based deployment (deploys origin/main after CI passes)
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# Root is needed for Docker; git and the backup run as the repository owner (REPO_USER, default ubuntu).
+User=root
+WorkingDirectory=/opt/api-eduassets
+EnvironmentFile=-/etc/eduassets/deploy.env
+ExecStart=/opt/api-eduassets/deploy/scripts/auto-deploy.sh
+TimeoutStartSec=45min
+Nice=5

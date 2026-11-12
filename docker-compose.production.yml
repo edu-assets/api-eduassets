@@ -15,6 +15,13 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN in .env.production}
       TRUST_PROXY: ${TRUST_PROXY:?Set TRUST_PROXY in .env.production}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Optional self-service password recovery email (all four SMTP/MAIL values, or none).
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     restart: unless-stopped
