@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { publicOccurrence } from '../lib/publicDto.js';
 import * as ocorrenciasService from '../services/ocorrencia.service.js';
+import { dispararNotificacao } from '../services/notificacao.service.js';
 
 export async function listar(req: Request, res: Response): Promise<void> {
   const ocorrencias = await ocorrenciasService.listarOcorrencias();
@@ -9,6 +10,17 @@ export async function listar(req: Request, res: Response): Promise<void> {
 
 export async function criar(req: Request, res: Response): Promise<void> {
   const criadas = await ocorrenciasService.criarOcorrencias(req.body, req.user!.sub);
+  // One notification per request, however many patrimony numbers it carried (they are never sent).
+  const primeira = criadas[0];
+  if (primeira) {
+    dispararNotificacao({
+      tipo: 'OCORRENCIA_REGISTRADA',
+      autorId: req.user!.sub,
+      entidadeId: primeira.id,
+      itens: [{ equipamentoId: primeira.equipamentoId, quantidade: criadas.length }],
+      tipoOcorrencia: primeira.tipo,
+    });
+  }
   res.status(201).json(criadas);
 }
 

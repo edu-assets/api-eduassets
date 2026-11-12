@@ -57,6 +57,7 @@ model Usuario {
   updatedUsers    Usuario[]   @relation("UsuarioUpdatedBy")
   auditLogs       AuditLog[]
   passwordResetTokens PasswordResetToken[]
+  pushSubscriptions PushSubscription[]
 
   @@index([createdById])
   @@index([updatedById])
@@ -151,6 +152,24 @@ model PasswordResetToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
   usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+}
+
+/// Web Push subscription of one browser/device of an administrator. No user agent or IP is stored.
+model PushSubscription {
+  id                  Int       @id @default(autoincrement())
+  usuarioId           Int
+  endpoint            String    @unique
+  p256dh              String
+  auth                String
+  notificarEmprestimo Boolean   @default(true)
+  notificarDevolucao  Boolean   @default(true)
+  notificarOcorrencia Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  lastSuccessAt       DateTime?
+  usuario             Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId])
 }

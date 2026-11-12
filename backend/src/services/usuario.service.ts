@@ -86,6 +86,7 @@ export async function resetarSenhaUsuario(id: number, senha: string, actorId: nu
   const passwordHash = await bcrypt.hash(senha, 12);
   await prisma.$transaction(async (tx) => {
     await tx.usuario.update({ where: { id }, data: { passwordHash, sessionVersion: { increment: 1 }, updatedById: actorId } });
+    await tx.pushSubscription.deleteMany({ where: { usuarioId: id } });
     await writeAudit(tx, actorId, 'PASSWORD_RESET', id, ['senha', 'sessionVersion']);
   });
 }

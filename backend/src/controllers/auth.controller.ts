@@ -3,12 +3,13 @@ import * as authService from '../services/auth.service.js';
 import { clearSessionCookie, setSessionCookie } from '../lib/sessionCookie.js';
 import { consumeRfidLoginCode } from '../lib/rfidLoginCode.js';
 import { isMailConfigured } from '../lib/mailer.js';
+import { isPushConfigured } from '../lib/webPush.js';
 import { logger } from '../lib/logger.js';
 import * as passwordRecovery from '../services/passwordRecovery.service.js';
 
 export function sessionCapabilities(_req: Request, res: Response): void {
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ cookieSession: true, passwordRecovery: isMailConfigured() });
+  res.json({ cookieSession: true, passwordRecovery: isMailConfigured(), pushNotifications: isPushConfigured() });
 }
 
 /** Always 202 with the same body, answered before any lookup, so the response never reveals whether the account exists. */

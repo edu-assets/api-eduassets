@@ -105,6 +105,7 @@ export async function redefinirSenhaComToken(token: string, senha: string): Prom
       data: { passwordHash: novoHash, sessionVersion: { increment: 1 } },
     });
     await tx.passwordResetToken.deleteMany({ where: { usuarioId: registro.usuarioId, id: { not: registro.id } } });
+    await tx.pushSubscription.deleteMany({ where: { usuarioId: registro.usuarioId } });
     await writeAuditLog(tx, registro.usuarioId, 'PASSWORD_RESET_SELF', 'Usuario', registro.usuarioId, ['passwordHash', 'sessionVersion']);
   });
 }

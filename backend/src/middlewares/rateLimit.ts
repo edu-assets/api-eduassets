@@ -86,3 +86,13 @@ export const rfidProvisionRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { erro: 'backend.seguranca.muitas_provisionamentos_rfid' },
 });
+
+/** Push subscription changes and test sends: per administrator, so a shared IP does not share the budget. */
+export const pushNotificationsRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => req.user ? `user:${req.user.sub}` : ipKeyGenerator(req.ip ?? ''),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { erro: 'backend.notificacoes.muitas_requisicoes' },
+});

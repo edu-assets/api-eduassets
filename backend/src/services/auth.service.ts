@@ -94,6 +94,7 @@ export async function alterarSenha(usuarioId: number, senhaAtual: string, novaSe
       data: { passwordHash: novoHash, sessionVersion: { increment: 1 } },
       select: { id: true, nivelAcesso: true, sessionVersion: true },
     });
+    await tx.pushSubscription.deleteMany({ where: { usuarioId: usuario.id } });
     await writeAuditLog(tx, usuario.id, 'PASSWORD_CHANGE', 'Usuario', usuario.id, ['passwordHash', 'sessionVersion']);
     return changed;
   });

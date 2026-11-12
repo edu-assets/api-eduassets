@@ -6,6 +6,7 @@ import { responsaveisRouter } from './responsaveis.js';
 import { usuariosRouter } from './usuarios.js';
 import { emprestimosRouter } from './emprestimos.js';
 import { ocorrenciasRouter } from './ocorrencias.js';
+import { notificacoesRouter } from './notificacoes.js';
 
 export const routes = Router();
 
@@ -16,3 +17,4 @@ routes.use('/responsaveis', responsaveisRouter);
 routes.use('/usuarios', usuariosRouter);
 routes.use('/emprestimos', emprestimosRouter);
 routes.use('/ocorrencias', ocorrenciasRouter);
+routes.use('/notificacoes', notificacoesRouter);

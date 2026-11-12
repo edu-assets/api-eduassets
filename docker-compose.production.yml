@@ -25,6 +25,10 @@ services:
       # Optional contact details shown in emails; SUPPORT_EMAIL is also the Reply-To address.
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-}
+      # Optional Web Push notifications for administrators (all three VAPID values, or none).
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     restart: unless-stopped
