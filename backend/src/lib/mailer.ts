@@ -31,7 +31,7 @@ export interface MailConfig {
 const MAIL_VARIABLES = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'] as const;
 
 /**
- * SMTP settings for outgoing mail (e.g. Zoho Mail: smtppro.zoho.com:465 for domain accounts).
+ * SMTP settings for outgoing mail (production: Brevo, smtp-relay.brevo.com:587 with STARTTLS).
  * Returns null when mail is not configured; throws when it is only partially configured.
  */
 export function getMailConfig(env: NodeJS.ProcessEnv = process.env): MailConfig | null {
