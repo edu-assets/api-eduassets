@@ -359,7 +359,8 @@ test('self-service password recovery sends a single-use link and revokes existin
     for (let i = 0; i < 50 && sent.length === 0; i++) await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(sent.length, 1);
     assert.equal(sent[0].to, recoveryLogin);
-    assert.match(sent[0].subject, /password reset/);
+    assert.match(sent[0].subject, /Reset your eduAssets password/);
+    assert.ok(sent[0].attachments?.some((file) => file.cid === 'eduassets-header'), 'header banner must be embedded inline');
     assert.match(sent[0].html, /Synthetic &lt;Recovery&gt; User/);
     const token = /#redefinir-senha=([A-Za-z0-9_-]{43})/.exec(sent[0].text)?.[1];
     assert.ok(token, 'email must contain a reset link');

@@ -74,6 +74,14 @@ export function getRuntimeConfig(env: NodeJS.ProcessEnv = process.env) {
     if (!['http:', 'https:'].includes(parsed.protocol) || parsed.search || parsed.hash) throw new Error('APP_PUBLIC_URL deve ser uma URL HTTP(S) sem query ou fragmento.');
     if (nodeEnv === 'production' && parsed.protocol !== 'https:') throw new Error('APP_PUBLIC_URL deve usar HTTPS em produção.');
   }
+  if (env.SUPPORT_EMAIL?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(env.SUPPORT_EMAIL.trim())) {
+    throw new Error('SUPPORT_EMAIL deve ser um endereço de e-mail válido.');
+  }
+  if (env.PUBLIC_SITE_URL?.trim()) {
+    let parsed: URL;
+    try { parsed = new URL(env.PUBLIC_SITE_URL.trim()); } catch { throw new Error('PUBLIC_SITE_URL deve ser uma URL HTTP(S) válida.'); }
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('PUBLIC_SITE_URL deve ser uma URL HTTP(S) válida.');
+  }
   if (nodeEnv === 'production') {
     if (!env.JWT_SECRET || env.JWT_SECRET.length < 32) throw new Error('JWT_SECRET é obrigatório em produção e deve conter pelo menos 32 caracteres.');
     if (!env.DATABASE_URL) throw new Error('DATABASE_URL é obrigatório em produção.');

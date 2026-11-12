@@ -3,7 +3,8 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../errors/AppError.js';
 import { writeAuditLog } from '../lib/auditLog.js';
-import { sendMail, type MailMessage } from '../lib/mailer.js';
+import { sendMail } from '../lib/mailer.js';
+import { montarEmailRecuperacao, type Idioma } from '../lib/passwordRecoveryEmail.js';
 import { getRuntimeConfig } from '../config/runtimeConfig.js';
 import { normalizarLogin } from '../schemas/usuario.schema.js';
 
@@ -11,7 +12,7 @@ export const RESET_TOKEN_TTL_MINUTES = 30;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LINK_INVALIDO = 'backend.auth.link_recuperacao_invalido';
 
-export type Idioma = 'pt' | 'en';
+export type { Idioma };
 
 export function gerarResetToken(): string {
   return randomBytes(32).toString('base64url');
@@ -34,39 +35,11 @@ export function montarLinkRecuperacao(token: string, appUrl: string = getAppPubl
   return `${appUrl}/#redefinir-senha=${token}`;
 }
 
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
-}
-
-export function montarEmailRecuperacao(nome: string, link: string, idioma: Idioma): Omit<MailMessage, 'to'> {
-  const t = idioma === 'en'
-    ? {
-        subject: 'eduAssets - password reset',
-        hello: `Hello, ${nome}.`,
-        intro: 'We received a request to reset the password of your eduAssets account.',
-        action: 'Set a new password',
-        expiry: `This link expires in ${RESET_TOKEN_TTL_MINUTES} minutes and can be used only once.`,
-        ignore: 'If you did not request it, ignore this message: your current password keeps working.',
-        auto: 'Automatic message - please do not reply.',
-      }
-    : {
-        subject: 'eduAssets - redefinição de senha',
-        hello: `Olá, ${nome}.`,
-        intro: 'Recebemos um pedido para redefinir a senha da sua conta no eduAssets.',
-        action: 'Definir nova senha',
-        expiry: `Este link expira em ${RESET_TOKEN_TTL_MINUTES} minutos e só pode ser usado uma vez.`,
-        ignore: 'Se você não fez esse pedido, ignore esta mensagem: sua senha atual continua valendo.',
-        auto: 'Mensagem automática - não responda.',
-      };
-  const text = [t.hello, '', t.intro, '', `${t.action}: ${link}`, '', t.expiry, t.ignore, '', t.auto].join('\n');
-  const html = `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;line-height:1.5">
-<p>${escapeHtml(t.hello)}</p>
-<p>${escapeHtml(t.intro)}</p>
-<p><a href="${escapeHtml(link)}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px">${escapeHtml(t.action)}</a></p>
-<p style="font-size:13px;color:#4b5563">${escapeHtml(t.expiry)}<br>${escapeHtml(t.ignore)}</p>
-<p style="font-size:12px;color:#6b7280">${escapeHtml(t.auto)}</p>
-</body></html>`;
-  return { subject: t.subject, text, html };
+/** Optional public contact details shown in the email (SUPPORT_EMAIL is also used as Reply-To). */
+export function getEmailContacts(env: NodeJS.ProcessEnv = process.env): { supportEmail?: string; siteUrl?: string } {
+  const supportEmail = env.SUPPORT_EMAIL?.trim() || undefined;
+  const siteUrl = env.PUBLIC_SITE_URL?.trim().replace(/\/+$/, '') || undefined;
+  return { ...(supportEmail ? { supportEmail } : {}), ...(siteUrl ? { siteUrl } : {}) };
 }
 
 /**
@@ -95,7 +68,17 @@ export async function solicitarRecuperacao(login: string, idioma: Idioma = 'pt')
     await writeAuditLog(tx, usuario.id, 'PASSWORD_RESET_REQUEST', 'Usuario', usuario.id, []);
   });
 
-  const conteudo = montarEmailRecuperacao(usuario.nome, montarLinkRecuperacao(token), idioma);
+  const appUrl = getAppPublicUrl();
+  const conteudo = montarEmailRecuperacao({
+    nome: usuario.nome,
+    login: usuario.login,
+    link: montarLinkRecuperacao(token, appUrl),
+    idioma,
+    solicitadoEm: new Date(agora),
+    validadeMinutos: RESET_TOKEN_TTL_MINUTES,
+    appUrl,
+    ...getEmailContacts(),
+  });
   await sendMail({ to: usuario.login, ...conteudo });
   return true;
 }

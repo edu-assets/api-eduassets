@@ -9,6 +9,7 @@ RUN npm ci
 COPY prisma ./prisma
 COPY prisma.config.ts tsconfig.json ./
 COPY src ./src
+COPY assets ./assets
 RUN DATABASE_URL='postgresql://build:build@127.0.0.1:5432/build' DIRECT_URL='postgresql://build:build@127.0.0.1:5432/build' npm run build
 
 # Release-only target: retains Prisma CLI and TSX for controlled migrations/seeding.

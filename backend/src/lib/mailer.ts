@@ -2,11 +2,20 @@ import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { parsePort } from '../config/runtimeConfig.js';
 
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  cid?: string;
+  contentType?: string;
+}
+
 export interface MailMessage {
   to: string;
   subject: string;
   text: string;
   html: string;
+  replyTo?: string;
+  attachments?: MailAttachment[];
 }
 export type MailSender = (message: MailMessage) => Promise<void>;
 
@@ -64,5 +73,13 @@ export async function sendMail(message: MailMessage): Promise<void> {
     greetingTimeout: 10_000,
     socketTimeout: 20_000,
   });
-  await transporter.sendMail({ from: config.from, to: message.to, subject: message.subject, text: message.text, html: message.html });
+  await transporter.sendMail({
+    from: config.from,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+    ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+  });
 }
