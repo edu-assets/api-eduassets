@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily eduAssets backup
+
+[Timer]
+# 03:30 in Brazil (UTC-3), outside school hours.
+OnCalendar=*-*-* 06:30:00 UTC
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

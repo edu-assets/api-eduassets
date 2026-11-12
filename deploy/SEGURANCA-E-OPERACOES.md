@@ -33,7 +33,19 @@ export BACKUP_DIR='/var/backups/eduassets'                          # diretório
 
 Configure controles de acesso, retenção/versionamento e monitoramento do provedor externo de acordo com os objetivos de recuperação da organização. Um `rclone copyto` concluído comprova a transferência, não a configuração de retenção nem a recuperação da conta do provedor.
 
+### Agendamento, retenção e monitoramento
+
+- `scripts/run-scheduled-backup.sh` + `systemd/eduassets-backup.{service,timer}`: backup diário às 06:30 UTC, lendo `/etc/eduassets/backup.env` (modo `0600`; modelo em `systemd/backup.env.example`), seguido de `scripts/prune-backups.sh` (7 dias locais, 30 dias no remoto, nunca apaga se houver menos de 3 cópias recentes). `BACKUP_PING_URL` opcional para alerta por dead-man switch.
+- `scripts/vm-health-check.sh` + `systemd/eduassets-healthcheck.{service,timer}`: a cada 5 minutos verifica disco, memória, saúde do container `api` (reinicia após 3 verificações `unhealthy` seguidas) e idade do backup local (limite 26 h). `HEALTH_PING_URL` opcional.
+- `scripts/public-uptime-check.sh` + `.github/workflows/uptime.yml`: verificação externa a cada 15 minutos de `/health`, `/ready`, app, landing page, documentação, validade TLS e `security.txt`.
+
+Os passos de instalação na VM estão no Guia de Hospedagem central (§10 e §11).
+
 ## Exercício seguro de restauração
+
+**Ensaio automatizado (recomendado):** `scripts/verify-backup-restore.sh` roda na máquina do operador que guarda a identidade `age` privada, baixa o backup mais recente via `rclone` (ou usa `BACKUP_FILE`), restaura em um PostgreSQL descartável em Docker ligado a `127.0.0.1`, confere `_prisma_migrations` e contagens de linhas e destrói tudo ao final. Não se conecta à produção. Exemplo: `AGE_IDENTITY=~/.config/eduassets/age-identity.txt RCLONE_SOURCE=r2:eduassets-postgres-backups bash deploy/scripts/verify-backup-restore.sh`.
+
+**Restauração manual em banco vazio (procedimento abaixo):**
 
 Restaure somente em um banco descartável, recém-criado e vazio. Primeiro transfira um backup criptografado e a identidade privada `age` por canais protegidos aprovados. Defina `DATABASE_URL` para uma URL sem senha do alvo vazio, use o `PGPASSFILE` protegido e configure `AGE_IDENTITY` para o arquivo de identidade privada com modo `0600`:
 

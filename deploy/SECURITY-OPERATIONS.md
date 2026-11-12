@@ -33,7 +33,19 @@ export BACKUP_DIR='/var/backups/eduassets'                          # private lo
 
 Use the offsite provider's access controls, retention/versioning, and monitoring to meet the organization's recovery objectives. A successful `rclone copyto` proves transfer completion, not that provider retention or account-level disaster recovery has been configured.
 
+### Scheduling, retention and monitoring
+
+- `scripts/run-scheduled-backup.sh` + `systemd/eduassets-backup.{service,timer}`: daily backup at 06:30 UTC, reading `/etc/eduassets/backup.env` (mode `0600`; template in `systemd/backup.env.example`), followed by `scripts/prune-backups.sh` (7 days local, 30 days remote, never deletes when fewer than 3 recent copies exist). Optional `BACKUP_PING_URL` for dead-man-switch alerting.
+- `scripts/vm-health-check.sh` + `systemd/eduassets-healthcheck.{service,timer}`: every 5 minutes checks disk, memory, `api` container health (restarts after 3 consecutive `unhealthy` checks) and local backup age (26 h limit). Optional `HEALTH_PING_URL`.
+- `scripts/public-uptime-check.sh` + `.github/workflows/uptime.yml`: external check every 15 minutes of `/health`, `/ready`, app, landing page, documentation, TLS validity and `security.txt`.
+
+VM installation steps are in the central Hosting Guide (§10 and §11).
+
 ## Safe restore drill
+
+**Automated drill (recommended):** `scripts/verify-backup-restore.sh` runs on the operator machine that holds the private `age` identity, downloads the newest backup through `rclone` (or uses `BACKUP_FILE`), restores it into a disposable Docker PostgreSQL bound to `127.0.0.1`, checks `_prisma_migrations` and row counts and destroys everything at the end. It never connects to production. Example: `AGE_IDENTITY=~/.config/eduassets/age-identity.txt RCLONE_SOURCE=r2:eduassets-postgres-backups bash deploy/scripts/verify-backup-restore.sh`.
+
+**Manual restore into an empty database (procedure below):**
 
 Restore only to a newly created, disposable, empty database. First transfer an encrypted backup and the private age identity through approved protected channels. Set `DATABASE_URL` to a password-free URL for the empty target, use the same protected `PGPASSFILE`, and set `AGE_IDENTITY` to the mode-`0600` private identity file:
 

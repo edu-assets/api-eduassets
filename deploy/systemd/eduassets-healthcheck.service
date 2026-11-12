@@ -1,0 +1,14 @@
+[Unit]
+Description=eduAssets VM health check (disk, memory, API container, backup freshness)
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+# Needs access to the Docker socket to inspect/restart the API container.
+User=root
+EnvironmentFile=-/etc/eduassets/healthcheck.env
+ExecStart=/opt/api-eduassets/deploy/scripts/vm-health-check.sh
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=5min

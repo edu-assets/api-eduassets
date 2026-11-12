@@ -1,0 +1,17 @@
+[Unit]
+Description=eduAssets encrypted PostgreSQL backup (dump, age encryption, offsite upload, retention)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Run as the operator account that owns /etc/eduassets/{backup.env,pgpass} and the rclone config.
+User=ubuntu
+WorkingDirectory=/opt/api-eduassets
+Environment=EDUASSETS_BACKUP_ENV=/etc/eduassets/backup.env
+ExecStart=/opt/api-eduassets/deploy/scripts/run-scheduled-backup.sh
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=30min

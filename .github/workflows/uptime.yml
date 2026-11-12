@@ -1,0 +1,26 @@
+name: Uptime
+
+# External monitoring of the public eduAssets endpoints (API health/readiness, app, landing page,
+# documentation host, TLS expiry and security.txt validity). A failed scheduled run is reported by
+# GitHub's Actions notifications to the account that last changed this schedule.
+# Note: GitHub pauses scheduled workflows after 60 days without repository activity.
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Probe public endpoints
+        run: bash deploy/scripts/public-uptime-check.sh
