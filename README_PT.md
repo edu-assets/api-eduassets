@@ -6,7 +6,7 @@
 
 [README em inglês](README.md) · [Frontend](frontend.md) · [Backend](backend.md) · [Repositório de documentação](https://github.com/edu-assets/docs-eduassets) · [Runbook de segurança e recuperação](deploy/SEGURANCA-E-OPERACOES.md)
 
-> **Status: Versão oficial 1.5.1.** O eduAssets é uma aplicação de inventário e empréstimo de equipamentos escolares. Frontend, backend, documentação e portfólio agora têm repositórios separados. Este README apresenta o produto como um todo; os guias detalhados e o histórico de versões são mantidos no repositório central de documentação.
+> **Status: Versão oficial 1.5.2.** O eduAssets é uma aplicação de inventário e empréstimo de equipamentos escolares. Frontend, backend, documentação e portfólio agora têm repositórios separados. Este README apresenta o produto como um todo; os guias detalhados e o histórico de versões são mantidos no repositório central de documentação.
 
 ## Visão geral
 

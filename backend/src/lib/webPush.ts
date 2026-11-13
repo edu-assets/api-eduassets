@@ -1,3 +1,4 @@
+import { createECDH } from 'node:crypto';
 import webpush from 'web-push';
 import { logger } from './logger.js';
 
@@ -27,6 +28,21 @@ function decodedLength(value: string): number | null {
   return Buffer.from(value, 'base64url').length;
 }
 
+/**
+ * The public key must be the uncompressed P-256 point derived from the private key. A key that is merely 65 bytes
+ * long (typo, truncated copy, keys from different pairs) makes browsers fail `pushManager.subscribe()` with
+ * "Registration failed - push service error", or the push services reject every send with 401/403.
+ */
+function isMatchingKeyPair(publicKey: string, privateKey: string): boolean {
+  try {
+    const ecdh = createECDH('prime256v1');
+    ecdh.setPrivateKey(Buffer.from(privateKey, 'base64url'));
+    return ecdh.getPublicKey().equals(Buffer.from(publicKey, 'base64url'));
+  } catch {
+    return false;
+  }
+}
+
 function isValidSubject(subject: string): boolean {
   if (/^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subject)) return true;
   try {
@@ -39,7 +55,8 @@ function isValidSubject(subject: string): boolean {
 /**
  * VAPID settings for Web Push. Returns null when the feature is not (or not validly) configured;
  * an invalid or partial configuration disables push instead of stopping the API (the feature is optional).
- * Keys come from `npx web-push generate-vapid-keys`: a 65-byte public key and a 32-byte private key, base64url.
+ * Keys come from `npx web-push generate-vapid-keys`: a 65-byte public key and a 32-byte private key, base64url,
+ * and the public key must be the one derived from the private key.
  */
 export function getPushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig | null {
   const [publicKey, privateKey, subject] = VAPID_VARIABLES.map((name) => env[name]?.trim() ?? '');
@@ -50,6 +67,10 @@ export function getPushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig 
   }
   if (decodedLength(publicKey) !== 65 || decodedLength(privateKey) !== 32 || !isValidSubject(subject)) {
     logger.warn('Notificações push desativadas: configuração VAPID inválida.');
+    return null;
+  }
+  if (!isMatchingKeyPair(publicKey, privateKey)) {
+    logger.warn('Notificações push desativadas: VAPID_PUBLIC_KEY não corresponde a VAPID_PRIVATE_KEY.');
     return null;
   }
   return { publicKey, privateKey, subject };

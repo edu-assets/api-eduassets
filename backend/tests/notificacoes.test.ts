@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { createECDH } from 'node:crypto';
 import {
   isAllowedPushEndpoint,
   pushInscricaoSchema,
@@ -391,9 +392,11 @@ describe('notificarEvento delivery', () => {
 });
 
 describe('VAPID configuration', () => {
-  // 65-byte public key and 32-byte private key, base64url (shape of `web-push generate-vapid-keys`).
-  const publicKey = Buffer.alloc(65, 4).toString('base64url');
-  const privateKey = Buffer.alloc(32, 7).toString('base64url');
+  // Real P-256 pair, base64url (65-byte public key, 32-byte private key: same as `web-push generate-vapid-keys`).
+  const ecdh = createECDH('prime256v1');
+  ecdh.generateKeys();
+  const publicKey = ecdh.getPublicKey().toString('base64url');
+  const privateKey = ecdh.getPrivateKey().toString('base64url');
 
   it('is disabled when nothing, a partial set or malformed values are provided', () => {
     assert.equal(getPushConfig({}), null);
@@ -410,6 +413,22 @@ describe('VAPID configuration', () => {
       { publicKey, privateKey, subject: 'mailto:suporte@eduassets.tech' }
     );
     assert.notEqual(getPushConfig({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: privateKey, VAPID_SUBJECT: 'https://eduassets.tech' }), null);
+  });
+
+  it('is disabled when the public key is not the one derived from the private key', () => {
+    const other = createECDH('prime256v1');
+    other.generateKeys();
+    const subject = 'mailto:suporte@eduassets.tech';
+    // Valid point, but from another pair: browsers would subscribe with it and every send would be rejected.
+    assert.equal(getPushConfig({ VAPID_PUBLIC_KEY: other.getPublicKey().toString('base64url'), VAPID_PRIVATE_KEY: privateKey, VAPID_SUBJECT: subject }), null);
+    // 65 bytes but not a P-256 point: subscribe() fails with "Registration failed - push service error".
+    assert.equal(getPushConfig({ VAPID_PUBLIC_KEY: Buffer.alloc(65, 4).toString('base64url'), VAPID_PRIVATE_KEY: privateKey, VAPID_SUBJECT: subject }), null);
+    // Compressed/garbage marker byte.
+    const altered = Buffer.from(publicKey, 'base64url');
+    altered[0] = 0x03;
+    assert.equal(getPushConfig({ VAPID_PUBLIC_KEY: altered.toString('base64url'), VAPID_PRIVATE_KEY: privateKey, VAPID_SUBJECT: subject }), null);
+    // A private key outside the curve order cannot be used at all.
+    assert.equal(getPushConfig({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: Buffer.alloc(32, 0xff).toString('base64url'), VAPID_SUBJECT: subject }), null);
   });
 
 });
