@@ -4,8 +4,12 @@ import * as ocorrenciasService from '../services/ocorrencia.service.js';
 import { dispararNotificacao } from '../services/notificacao.service.js';
 
 export async function listar(req: Request, res: Response): Promise<void> {
-  const ocorrencias = await ocorrenciasService.listarOcorrencias();
-  res.json(req.user ? ocorrencias : ocorrencias.map(publicOccurrence));
+  if (req.user) {
+    res.json(await ocorrenciasService.listarOcorrencias());
+    return;
+  }
+  // Guests never load authorship; the allowlist projection is applied on top.
+  res.json((await ocorrenciasService.listarOcorrenciasPublicas()).map(publicOccurrence));
 }
 
 export async function criar(req: Request, res: Response): Promise<void> {

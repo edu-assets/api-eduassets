@@ -11,7 +11,10 @@ const marker = `it-${Date.now()}-${process.pid}`;
 const login = `${marker}@example.invalid`;
 const password = 'Synthetic-Integration-Password-01';
 const integrationOrigin = process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).find(Boolean) ?? 'http://127.0.0.1';
-const rows: { categoryId?: number; responsibleId?: number; equipmentId?: number; secondEquipmentId?: number; userId?: number; targetUserId?: number; loanIds: number[]; occurrenceIds: number[] } = { loanIds: [], occurrenceIds: [] };
+const rows: { categoryId?: number; responsibleId?: number; equipmentId?: number; secondEquipmentId?: number; userId?: number; targetUserId?: number; loanIds: number[]; occurrenceIds: number[];
+  extraEquipmentIds: number[]; extraResponsibleIds: number[]; extraCategoryIds: number[] } = {
+  loanIds: [], occurrenceIds: [], extraEquipmentIds: [], extraResponsibleIds: [], extraCategoryIds: [],
+};
 let server: Server;
 let baseUrl: string;
 let adminToken = '';
@@ -84,6 +87,9 @@ after(async () => {
     await prisma.emprestimo.deleteMany({ where: { id: { in: rows.loanIds } } });
   }
   if (rows.occurrenceIds.length) await prisma.ocorrencia.deleteMany({ where: { id: { in: rows.occurrenceIds } } });
+  if (rows.extraEquipmentIds.length) await prisma.equipamento.deleteMany({ where: { id: { in: rows.extraEquipmentIds } } });
+  if (rows.extraResponsibleIds.length) await prisma.responsavel.deleteMany({ where: { id: { in: rows.extraResponsibleIds } } });
+  if (rows.extraCategoryIds.length) await prisma.categoria.deleteMany({ where: { id: { in: rows.extraCategoryIds } } });
   const actorIds = [rows.userId, rows.targetUserId].filter((id): id is number => id !== undefined);
   if (actorIds.length) await prisma.auditLog.deleteMany({ where: { actorId: { in: actorIds } } });
   if (rows.targetUserId) await prisma.usuario.delete({ where: { id: rows.targetUserId } });
@@ -334,6 +340,117 @@ test('simultaneous occurrence resolution changes inventory exactly once', async 
   const equipment = await prisma.equipamento.findUniqueOrThrow({ where: { id: rows.equipmentId } });
   assert.equal(equipment.quantidadeDisponivel, 10);
   assert.equal(equipment.quantidadeQuebrada, 0);
+});
+
+const AUTHOR_KEYS = ['criadoPor', 'criadoPorId', 'atualizadoPor', 'atualizadoPorId', 'atualizadoEm',
+  'devolvidoPor', 'devolvidoPorId', 'resolvidoPor', 'resolvidoPorId'];
+function assertNoAuthorship(value: unknown, path = 'body'): void {
+  if (Array.isArray(value)) { value.forEach((item, index) => assertNoAuthorship(item, `${path}[${index}]`)); return; }
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      assert.equal(AUTHOR_KEYS.includes(key), false, `Guest response leaked ${path}.${key}`);
+      assertNoAuthorship(child, `${path}.${key}`);
+    }
+  }
+}
+
+test('record authorship is written on create/update/return/resolve and shown only to authenticated users', async () => {
+  const author = { id: rows.userId, nome: 'Synthetic Administrator' };
+  const isAuthor = (value: unknown) => {
+    assert.deepEqual(value, author);
+    assert.deepEqual(Object.keys(value as Json).sort(), ['id', 'nome'], 'author objects carry only id and nome');
+  };
+
+  const category = await api('/categorias', json('POST', { nome: `Synthetic authorship ${marker}` }), adminToken);
+  assert.equal(category.status, 201);
+  rows.extraCategoryIds.push(category.body.id);
+  isAuthor(category.body.criadoPor);
+
+  const responsible = await api('/responsaveis', json('POST', { nome: 'Synthetic Authorship Responsible', cargo: 'Test fixture' }), adminToken);
+  assert.equal(responsible.status, 201);
+  rows.extraResponsibleIds.push(responsible.body.id);
+  isAuthor(responsible.body.criadoPor);
+
+  const equipment = await api('/equipamentos', json('POST', {
+    categoriaId: category.body.id, modelo: `Synthetic authorship equipment ${marker}`, quantidadeTotal: 5,
+  }), adminToken);
+  assert.equal(equipment.status, 201);
+  const equipmentId: number = equipment.body.id;
+  rows.extraEquipmentIds.push(equipmentId);
+  isAuthor(equipment.body.criadoPor);
+  assert.equal(equipment.body.atualizadoPor, null);
+
+  const loan = await api('/emprestimos', json('POST', {
+    solicitanteNome: `Synthetic authorship borrower ${marker}`, responsavelId: responsible.body.id,
+    itens: [{ equipamentoId: equipmentId, quantidade: 1 }],
+  }), adminToken);
+  assert.equal(loan.status, 201);
+  rows.loanIds.push(loan.body.id);
+  isAuthor(loan.body.criadoPor);
+  assert.equal(loan.body.atualizadoPor, null);
+  assert.equal(loan.body.atualizadoEm, null);
+  assert.equal(loan.body.devolvidoPor, null);
+
+  const edited = await api(`/emprestimos/${loan.body.id}`, json('PATCH', { itens: [{ equipamentoId: equipmentId, quantidade: 2 }] }), adminToken);
+  assert.equal(edited.status, 200);
+  isAuthor(edited.body.atualizadoPor);
+  assert.ok(!Number.isNaN(Date.parse(edited.body.atualizadoEm)), 'atualizadoEm must be an ISO timestamp');
+  isAuthor(edited.body.criadoPor);
+
+  const returned = await api(`/emprestimos/${loan.body.id}/devolver`, json('PATCH', { dataDevolucao: new Date().toISOString() }), adminToken);
+  assert.equal(returned.status, 200);
+  isAuthor(returned.body.devolvidoPor);
+
+  const occurrence = await api('/ocorrencias', json('POST', {
+    equipamentoId: equipmentId, tipo: 'MANUTENCAO', problema: 'outro', descricao: `Synthetic authorship ${marker}`, numeros: [`AUT-${marker}`],
+  }), adminToken);
+  assert.equal(occurrence.status, 201);
+  const occurrenceId: number = occurrence.body[0].id;
+  rows.occurrenceIds.push(occurrenceId);
+  isAuthor(occurrence.body[0].criadoPor);
+  assert.equal(occurrence.body[0].resolvidoPor, null);
+  const occurrenceEdit = await api(`/ocorrencias/${occurrenceId}`, json('PATCH', { descricao: `Synthetic authorship edited ${marker}` }), adminToken);
+  assert.equal(occurrenceEdit.status, 200);
+  isAuthor(occurrenceEdit.body.atualizadoPor);
+  assert.ok(!Number.isNaN(Date.parse(occurrenceEdit.body.atualizadoEm)));
+  const resolved = await api(`/ocorrencias/${occurrenceId}/resolver`, json('PATCH', { medidasTomadas: 'Synthetic resolved' }), adminToken);
+  assert.equal(resolved.status, 200);
+  isAuthor(resolved.body.resolvidoPor);
+
+  // Stock moves caused by loans and occurrences are not equipment edits (no Equipamento UPDATE audit row).
+  const untouched = await prisma.equipamento.findUniqueOrThrow({ where: { id: equipmentId } });
+  assert.equal(untouched.atualizadoPorId, null);
+  const equipmentEdit = await api(`/equipamentos/${equipmentId}`, json('PATCH', { quantidadeTotal: 6 }), adminToken);
+  assert.equal(equipmentEdit.status, 200);
+  isAuthor(equipmentEdit.body.atualizadoPor);
+
+  // Authenticated lists carry the same author objects.
+  const staffLoans = await api('/emprestimos', {}, adminToken);
+  const staffLoan = staffLoans.body.find((item: Json) => item.id === loan.body.id);
+  isAuthor(staffLoan.criadoPor); isAuthor(staffLoan.atualizadoPor); isAuthor(staffLoan.devolvidoPor);
+  const staffOccurrences = await api('/ocorrencias', {}, adminToken);
+  const staffOccurrence = staffOccurrences.body.find((item: Json) => item.id === occurrenceId);
+  isAuthor(staffOccurrence.criadoPor); isAuthor(staffOccurrence.atualizadoPor); isAuthor(staffOccurrence.resolvidoPor);
+  const staffEquipment = (await api('/equipamentos', {}, adminToken)).body.find((item: Json) => item.id === equipmentId);
+  isAuthor(staffEquipment.criadoPor); isAuthor(staffEquipment.atualizadoPor);
+  isAuthor((await api('/categorias', {}, adminToken)).body.find((item: Json) => item.id === category.body.id).criadoPor);
+  isAuthor((await api('/responsaveis', {}, adminToken)).body.find((item: Json) => item.id === responsible.body.id).criadoPor);
+  const users = await api('/usuarios', {}, adminToken);
+  assert.equal(users.status, 200);
+  for (const user of users.body as Json[]) {
+    assert.ok('criadoPor' in user && 'atualizadoPor' in user);
+    for (const key of ['criadoPor', 'atualizadoPor']) {
+      if (user[key] !== null) assert.deepEqual(Object.keys(user[key] as Json).sort(), ['id', 'nome']);
+    }
+  }
+
+  // Guest Mode never receives authorship.
+  for (const path of ['/emprestimos?limit=100', '/ocorrencias', '/equipamentos', '/categorias']) {
+    const guest = await api(path);
+    assert.equal(guest.status, 200);
+    assertNoAuthorship(guest.body);
+    assert.equal(JSON.stringify(guest.body).includes(author.nome), false, `${path} leaked an author name`);
+  }
 });
 
 test('self-service password recovery sends a single-use link and revokes existing sessions', async () => {

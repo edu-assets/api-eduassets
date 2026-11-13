@@ -1,10 +1,18 @@
 import { prisma, runTransaction } from '../lib/prisma.js';
 import { writeAuditLog } from '../lib/auditLog.js';
+import { autoriaOcorrenciaInclude } from '../lib/authorship.js';
 import { AppError } from '../errors/AppError.js';
 import { decrementarComSeguranca } from './estoque.service.js';
 
-export const ocorrenciaInclude = {
+/** Shape loaded for Guest Mode (projected by publicOccurrence): no authorship. */
+export const ocorrenciaPublicaInclude = {
   equipamento: { include: { categoria: true } },
+};
+
+/** Authenticated shape: equipment plus who created, edited and resolved the occurrence ({ id, nome } only). */
+export const ocorrenciaInclude = {
+  ...ocorrenciaPublicaInclude,
+  ...autoriaOcorrenciaInclude,
 };
 
 export interface OcorrenciaCreateInput {
@@ -29,6 +37,14 @@ export async function listarOcorrencias() {
   });
 }
 
+/** Guest Mode list: never loads authorship. */
+export async function listarOcorrenciasPublicas() {
+  return prisma.ocorrencia.findMany({
+    include: ocorrenciaPublicaInclude,
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
 export async function criarOcorrencias(dados: OcorrenciaCreateInput, actorId: number) {
   const { equipamentoId, tipo, problema, descricao, numeros } = dados;
   const quantidade = numeros.length;
@@ -41,7 +57,7 @@ export async function criarOcorrencias(dados: OcorrenciaCreateInput, actorId: nu
     const criadas = await Promise.all(
       numeros.map(async (numero) => {
         const criada = await tx.ocorrencia.create({
-          data: { equipamentoId, tipo, problema, descricao, numero },
+          data: { equipamentoId, tipo, problema, descricao, numero, criadoPorId: actorId },
           include: ocorrenciaInclude,
         });
         await writeAuditLog(tx, actorId, 'CREATE', 'Ocorrencia', criada.id,
@@ -67,7 +83,10 @@ export async function atualizarOcorrencia(id: number, dados: OcorrenciaUpdateInp
   return runTransaction(async (tx) => {
     const atualizada = await tx.ocorrencia.update({
       where: { id },
-      data: { problema, descricao, numero, ...(medidasTomadas !== undefined ? { medidasTomadas } : {}) },
+      data: {
+        problema, descricao, numero, ...(medidasTomadas !== undefined ? { medidasTomadas } : {}),
+        atualizadoPorId: actorId, atualizadoEm: new Date(),
+      },
       include: ocorrenciaInclude,
     });
     await writeAuditLog(tx, actorId, 'UPDATE', 'Ocorrencia', id, Object.keys(dados));
@@ -90,7 +109,7 @@ export async function resolverOcorrencia(id: number, medidasTomadas: string, act
 
     const claim = await tx.ocorrencia.updateMany({
       where: { id, status: 'ABERTO' },
-      data: { status: 'RESOLVIDO', resolvidoEm: new Date(), medidasTomadas },
+      data: { status: 'RESOLVIDO', resolvidoEm: new Date(), medidasTomadas, resolvidoPorId: actorId },
     });
     if (claim.count !== 1) throw new AppError(409, 'backend.geral.registro_duplicado');
 

@@ -8,7 +8,15 @@ type PublicOccurrence = Prisma.OcorrenciaGetPayload<{
   include: { equipamento: { include: { categoria: true } } };
 }>;
 
-/** Deliberate Guest Mode projections: never serialize Prisma objects wholesale. */
+/**
+ * Deliberate Guest Mode projections: never serialize Prisma objects wholesale.
+ * Record authorship (criadoPor, atualizadoPor, devolvidoPor, resolvidoPor and their *Id columns, atualizadoEm) is
+ * staff information and is intentionally absent from every projection below.
+ */
+export function publicCategory(value: { id: number; nome: string }) {
+  return { id: value.id, nome: value.nome };
+}
+
 export function publicEquipment(value: PublicEquipment) {
   return {
     id: value.id, modelo: value.modelo,

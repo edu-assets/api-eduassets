@@ -1,5 +1,6 @@
 import { prisma, runTransaction } from '../lib/prisma.js';
 import { writeAuditLog } from '../lib/auditLog.js';
+import { autoriaEquipamentoInclude } from '../lib/authorship.js';
 import { AppError } from '../errors/AppError.js';
 
 export interface EquipamentoCreateInput {
@@ -16,6 +17,14 @@ export interface EquipamentoUpdateInput {
 
 export async function listarEquipamentos() {
   return prisma.equipamento.findMany({
+    include: { categoria: true, ...autoriaEquipamentoInclude },
+    orderBy: { categoria: { nome: 'asc' } },
+  });
+}
+
+/** Guest Mode list: never loads authorship (projected by publicEquipment). */
+export async function listarEquipamentosPublicos() {
+  return prisma.equipamento.findMany({
     include: { categoria: true },
     orderBy: { categoria: { nome: 'asc' } },
   });
@@ -25,8 +34,8 @@ export async function criarEquipamento(dados: EquipamentoCreateInput, actorId: n
   const { categoriaId, modelo, quantidadeTotal } = dados;
   return runTransaction(async (tx) => {
     const criado = await tx.equipamento.create({
-      data: { categoriaId, modelo, quantidadeTotal, quantidadeDisponivel: quantidadeTotal },
-      include: { categoria: true },
+      data: { categoriaId, modelo, quantidadeTotal, quantidadeDisponivel: quantidadeTotal, criadoPorId: actorId },
+      include: { categoria: true, ...autoriaEquipamentoInclude },
     });
     await writeAuditLog(tx, actorId, 'CREATE', 'Equipamento', criado.id,
       ['categoriaId', 'modelo', 'quantidadeTotal', 'quantidadeDisponivel']);
@@ -44,7 +53,12 @@ export async function atualizarEquipamento(id: number, dados: EquipamentoUpdateI
     if (!atual) throw new AppError(404, 'backend.equipamentos.nao_encontrado');
 
     const totalFinal = quantidadeTotal ?? atual.quantidadeTotal;
-    const disponivelFinal = quantidadeDisponivel ?? atual.quantidadeDisponivel;
+    // Total sent without Disponivel: apply the delta to Disponivel here, on the locked row, so concurrent loans cannot be lost.
+    const ajusteAutomatico = quantidadeTotal !== undefined && quantidadeDisponivel === undefined;
+    const disponivelFinal = ajusteAutomatico
+      ? atual.quantidadeDisponivel + (quantidadeTotal - atual.quantidadeTotal)
+      : quantidadeDisponivel ?? atual.quantidadeDisponivel;
+    if (disponivelFinal < 0) throw new AppError(409, 'backend.equipamentos.quantidade_em_uso');
     const quebradaFinal = quantidadeQuebrada ?? atual.quantidadeQuebrada;
     const emprestados = await tx.itemEmprestimo.aggregate({
       where: { equipamentoId: id, emprestimo: { status: 'ABERTO' } },
@@ -65,10 +79,14 @@ export async function atualizarEquipamento(id: number, dados: EquipamentoUpdateI
 
     const atualizado = await tx.equipamento.update({
       where: { id },
-      data: { quantidadeTotal, quantidadeDisponivel, quantidadeQuebrada },
-      include: { categoria: true },
+      // Only this explicit edit (audited as UPDATE) sets atualizadoPorId; stock moves caused by loans and occurrences
+      // are audited on those records and leave the equipment's editor untouched.
+      data: { quantidadeTotal, quantidadeDisponivel: ajusteAutomatico ? disponivelFinal : quantidadeDisponivel, quantidadeQuebrada, atualizadoPorId: actorId },
+      include: { categoria: true, ...autoriaEquipamentoInclude },
     });
-    await writeAuditLog(tx, actorId, 'UPDATE', 'Equipamento', id, Object.keys(dados));
+    const campos = Object.keys(dados);
+    if (ajusteAutomatico && disponivelFinal !== atual.quantidadeDisponivel) campos.push('quantidadeDisponivel');
+    await writeAuditLog(tx, actorId, 'UPDATE', 'Equipamento', id, campos);
     return atualizado;
   });
 }

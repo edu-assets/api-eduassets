@@ -10,7 +10,11 @@ datasource db {
 model Categoria {
   id           Int           @id @default(autoincrement())
   nome         String        @unique
+  criadoPorId  Int?
   equipamentos Equipamento[]
+  criadoPor    Usuario?      @relation("CategoriaCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([criadoPorId])
 }
 
 model Equipamento {
@@ -22,12 +26,18 @@ model Equipamento {
   quantidadeQuebrada   Int              @default(0)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
+  criadoPorId          Int?
+  atualizadoPorId      Int?
   categoria            Categoria        @relation(fields: [categoriaId], references: [id])
+  criadoPor            Usuario?         @relation("EquipamentoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  atualizadoPor        Usuario?         @relation("EquipamentoAtualizadoPor", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
   itensEmprestimo      ItemEmprestimo[]
   ocorrencias          Ocorrencia[]
 
   @@index([quantidadeDisponivel])
   @@index([quantidadeQuebrada])
+  @@index([criadoPorId])
+  @@index([atualizadoPorId])
   // Database CHECK constraints are declared in the versioned SQL migration (Prisma 6 has no schema attribute for CHECK).
 }
 
@@ -35,7 +45,11 @@ model Responsavel {
   id          Int          @id @default(autoincrement())
   nome        String
   cargo       String
+  criadoPorId Int?
   emprestimos Emprestimo[]
+  criadoPor   Usuario?     @relation("ResponsavelCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([criadoPorId])
 }
 
 model Usuario {
@@ -58,6 +72,17 @@ model Usuario {
   auditLogs       AuditLog[]
   passwordResetTokens PasswordResetToken[]
   pushSubscriptions PushSubscription[]
+  // Record authorship back-relations (who created/edited/returned/resolved each record).
+  categoriasCriadas       Categoria[]   @relation("CategoriaCriadoPor")
+  responsaveisCriados     Responsavel[] @relation("ResponsavelCriadoPor")
+  equipamentosCriados     Equipamento[] @relation("EquipamentoCriadoPor")
+  equipamentosAtualizados Equipamento[] @relation("EquipamentoAtualizadoPor")
+  emprestimosCriados      Emprestimo[]  @relation("EmprestimoCriadoPor")
+  emprestimosAtualizados  Emprestimo[]  @relation("EmprestimoAtualizadoPor")
+  emprestimosDevolvidos   Emprestimo[]  @relation("EmprestimoDevolvidoPor")
+  ocorrenciasCriadas      Ocorrencia[]  @relation("OcorrenciaCriadoPor")
+  ocorrenciasAtualizadas  Ocorrencia[]  @relation("OcorrenciaAtualizadoPor")
+  ocorrenciasResolvidas   Ocorrencia[]  @relation("OcorrenciaResolvidoPor")
 
   @@index([createdById])
   @@index([updatedById])
@@ -86,10 +111,20 @@ model Emprestimo {
   dataDevolucao   DateTime?
   observacao      String?
   createdAt       DateTime         @default(now())
+  criadoPorId     Int?
+  atualizadoPorId Int?
+  atualizadoEm    DateTime?
+  devolvidoPorId  Int?
   responsavel     Responsavel      @relation(fields: [responsavelId], references: [id])
+  criadoPor       Usuario?         @relation("EmprestimoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  atualizadoPor   Usuario?         @relation("EmprestimoAtualizadoPor", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
+  devolvidoPor    Usuario?         @relation("EmprestimoDevolvidoPor", fields: [devolvidoPorId], references: [id], onDelete: SetNull)
   itens           ItemEmprestimo[]
 
   @@index([status])
+  @@index([criadoPorId])
+  @@index([atualizadoPorId])
+  @@index([devolvidoPorId])
 }
 
 model ItemEmprestimo {
@@ -106,20 +141,30 @@ model ItemEmprestimo {
 }
 
 model Ocorrencia {
-  id             Int              @id @default(autoincrement())
-  equipamentoId  Int
-  numero         String?
-  tipo           TipoOcorrencia
-  status         StatusOcorrencia @default(ABERTO)
-  problema       String
-  descricao      String
-  resolvidoEm    DateTime?
-  medidasTomadas String?
-  createdAt      DateTime         @default(now())
-  equipamento    Equipamento      @relation(fields: [equipamentoId], references: [id])
+  id              Int              @id @default(autoincrement())
+  equipamentoId   Int
+  numero          String?
+  tipo            TipoOcorrencia
+  status          StatusOcorrencia @default(ABERTO)
+  problema        String
+  descricao       String
+  resolvidoEm     DateTime?
+  medidasTomadas  String?
+  createdAt       DateTime         @default(now())
+  criadoPorId     Int?
+  atualizadoPorId Int?
+  atualizadoEm    DateTime?
+  resolvidoPorId  Int?
+  equipamento     Equipamento      @relation(fields: [equipamentoId], references: [id])
+  criadoPor       Usuario?         @relation("OcorrenciaCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  atualizadoPor   Usuario?         @relation("OcorrenciaAtualizadoPor", fields: [atualizadoPorId], references: [id], onDelete: SetNull)
+  resolvidoPor    Usuario?         @relation("OcorrenciaResolvidoPor", fields: [resolvidoPorId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([equipamentoId, status, tipo])
+  @@index([criadoPorId])
+  @@index([atualizadoPorId])
+  @@index([resolvidoPorId])
 }
 
 enum NivelAcesso {

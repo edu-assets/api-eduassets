@@ -1,6 +1,7 @@
 import { prisma, runTransaction } from '../lib/prisma.js';
 import { AppError } from '../errors/AppError.js';
 import { writeAuditLog } from '../lib/auditLog.js';
+import { autoriaEmprestimoInclude } from '../lib/authorship.js';
 import {
   agruparQuantidades,
   validarEstoqueDisponivel,
@@ -53,9 +54,11 @@ function limitarAoAgora(data: string | undefined): Date {
   return data ? new Date(Math.min(new Date(data).getTime(), Date.now())) : new Date();
 }
 
+/** Authenticated list only (the Guest page below never loads authorship). */
 export async function listarEmprestimos() {
   return prisma.emprestimo.findMany({
     include: {
+      ...autoriaEmprestimoInclude,
       responsavel: true,
       itens: {
         include: {
@@ -99,6 +102,7 @@ export async function criarEmprestimo(dados: EmprestimoCreateInput, actorId: num
         responsavelId,
         dataRetirada: dataRetiradaFinal,
         observacao,
+        criadoPorId: actorId,
         itens: {
           create: itens.map((item) => ({
             equipamentoId: item.equipamentoId,
@@ -106,7 +110,7 @@ export async function criarEmprestimo(dados: EmprestimoCreateInput, actorId: num
           })),
         },
       },
-      include: { itens: true },
+      include: { itens: true, ...autoriaEmprestimoInclude },
     });
 
     await decrementarComSeguranca(tx, quantidadesSolicitadas);
@@ -159,9 +163,10 @@ export async function atualizarItensEmprestimo(id: number, itens: ItemEmprestimo
 
     await decrementarComSeguranca(tx, quantidadesSolicitadas);
 
-    const atualizado = await tx.emprestimo.findUnique({
+    const atualizado = await tx.emprestimo.update({
       where: { id },
-      include: { responsavel: true, itens: { include: { equipamento: true } } },
+      data: { atualizadoPorId: actorId, atualizadoEm: new Date() },
+      include: { ...autoriaEmprestimoInclude, responsavel: true, itens: { include: { equipamento: true } } },
     });
     await writeAuditLog(tx, actorId, 'UPDATE', 'Emprestimo', id, ['itens']);
     return atualizado;
@@ -183,7 +188,7 @@ export async function devolverEmprestimo(id: number, dataDevolucao: string | und
 
     const resultado = await tx.emprestimo.updateMany({
       where: { id, status: 'ABERTO' },
-      data: { status: 'DEVOLVIDO', dataDevolucao: limitarAoAgora(dataDevolucao) },
+      data: { status: 'DEVOLVIDO', dataDevolucao: limitarAoAgora(dataDevolucao), devolvidoPorId: actorId },
     });
 
     if (resultado.count === 0) {
@@ -192,7 +197,7 @@ export async function devolverEmprestimo(id: number, dataDevolucao: string | und
 
     const emprestimo = await tx.emprestimo.findUniqueOrThrow({
       where: { id },
-      include: { itens: true },
+      include: { itens: true, ...autoriaEmprestimoInclude },
     });
 
     for (const item of [...emprestimo.itens].sort((a, b) => a.equipamentoId - b.equipamentoId)) {

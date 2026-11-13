@@ -20,6 +20,20 @@ function ehLoopback(remoteAddress: string | undefined): boolean {
   return remoteAddress === '127.0.0.1' || remoteAddress === '::1' || remoteAddress === '::ffff:127.0.0.1';
 }
 
+/** Shared by login and obterPerfil so both return the same user shape. */
+async function obterSenhaAlteradaEm(usuarioId: number): Promise<string | null> {
+  const ultimaTroca = await prisma.auditLog.findFirst({
+    where: {
+      entity: 'Usuario',
+      entityId: String(usuarioId),
+      action: { in: ['PASSWORD_CHANGE', 'PASSWORD_RESET', 'PASSWORD_RESET_SELF'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
+  });
+  return ultimaTroca ? ultimaTroca.createdAt.toISOString() : null;
+}
+
 export async function login(loginStr: string, password: string) {
   const loginNormalizado = loginStr.trim().toLowerCase();
   const usuario = await prisma.usuario.findFirst({
@@ -51,6 +65,8 @@ export async function login(loginStr: string, password: string) {
 
   const token = signToken({ sub: usuario.id, nivelAcesso: usuario.nivelAcesso, sessionVersion: usuario.sessionVersion });
 
+  const senhaAlteradaEm = await obterSenhaAlteradaEm(usuario.id);
+
   return {
     token,
     user: {
@@ -58,6 +74,7 @@ export async function login(loginStr: string, password: string) {
       nome: usuario.nome,
       login: usuario.login,
       nivelAcesso: usuario.nivelAcesso,
+      senhaAlteradaEm,
     },
   };
 }
@@ -68,11 +85,14 @@ export async function obterPerfil(usuarioId: number) {
     throw new AppError(401, 'backend.auth.usuario_nao_existe');
   }
 
+  const senhaAlteradaEm = await obterSenhaAlteradaEm(usuario.id);
+
   return {
     id: usuario.id,
     nome: usuario.nome,
     login: usuario.login,
     nivelAcesso: usuario.nivelAcesso,
+    senhaAlteradaEm,
   };
 }
 

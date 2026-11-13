@@ -4,6 +4,7 @@ import { AppError } from '../errors/AppError.js';
 import { gerarRfidToken, hashRfidToken } from '../lib/rfidToken.js';
 import { logger } from '../lib/logger.js';
 import { assertRfidAllowedForAccount } from '../lib/rfidPolicy.js';
+import { autorResumo, autorSelect } from '../lib/authorship.js';
 import { normalizarLogin, type UsuarioCreateSchemaInput, type UsuarioUpdateSchemaInput } from '../schemas/usuario.schema.js';
 import type { Prisma } from '@prisma/client';
 
@@ -28,11 +29,13 @@ async function writeAudit(tx: Prisma.TransactionClient, actorId: number, action:
 export async function listarUsuarios() {
   const usuarios = await prisma.usuario.findMany({
     orderBy: { nome: 'asc' },
-    select: { id: true, nome: true, login: true, nivelAcesso: true, ativo: true, createdAt: true, rfidTokenHash: true },
+    select: { id: true, nome: true, login: true, nivelAcesso: true, ativo: true, createdAt: true, rfidTokenHash: true,
+      createdBy: autorSelect, updatedBy: autorSelect },
   });
   return usuarios.map((u) => ({
     id: u.id, nome: u.nome, login: u.login, nivelAcesso: u.nivelAcesso, ativo: u.ativo,
     createdAt: u.createdAt.toISOString(), possuiCartaoRfid: Boolean(u.rfidTokenHash),
+    criadoPor: autorResumo(u.createdBy), atualizadoPor: autorResumo(u.updatedBy),
   }));
 }
 
@@ -64,6 +67,18 @@ export async function atualizarUsuario(id: number, dados: UsuarioUpdateSchemaInp
       const changedFields = Object.keys(dados);
       const before = await tx.usuario.findUnique({ where: { id }, select: { nivelAcesso: true, ativo: true } });
       if (!before) throw new AppError(404, 'backend.usuarios.nao_encontrado');
+      const desativando = dados.ativo === false && before.ativo;
+      const rebaixando = dados.nivelAcesso !== undefined && dados.nivelAcesso !== 'ADMINISTRADOR' && before.nivelAcesso === 'ADMINISTRADOR';
+      if (id === actorId) {
+        if (dados.ativo === false) throw new AppError(400, 'backend.usuarios.nao_pode_desativar_a_si_mesmo');
+        if (rebaixando) throw new AppError(400, 'backend.usuarios.nao_pode_rebaixar_a_si_mesmo');
+      }
+      if (before.ativo && before.nivelAcesso === 'ADMINISTRADOR' && (desativando || rebaixando)) {
+        const outrosAdmins = await tx.usuario.count({
+          where: { nivelAcesso: 'ADMINISTRADOR', ativo: true, id: { not: id } },
+        });
+        if (outrosAdmins === 0) throw new AppError(409, 'backend.usuarios.ultimo_administrador');
+      }
       if ((dados.nivelAcesso !== undefined && dados.nivelAcesso !== before.nivelAcesso) || (dados.ativo === false && before.ativo)) {
         data.sessionVersion = { increment: 1 };
         changedFields.push('sessionVersion');
@@ -75,7 +90,7 @@ export async function atualizarUsuario(id: number, dados: UsuarioUpdateSchemaInp
       await writeAudit(tx, actorId, 'UPDATE', id, changedFields);
       return { id: updated.id, nome: updated.nome, login: updated.login, nivelAcesso: updated.nivelAcesso, ativo: updated.ativo,
         updatedAt: updated.updatedAt.toISOString(), possuiCartaoRfid: Boolean(updated.rfidTokenHash) };
-    });
+    }, { isolationLevel: 'Serializable' });
   } catch (error) {
     if (isUniqueConflict(error)) throw new AppError(409, 'backend.geral.registro_duplicado');
     throw error;

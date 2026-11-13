@@ -56,3 +56,12 @@ test('accepts exactly 72 UTF-8 bytes and rejects 73 across every bcrypt password
   assert.equal(usuarioCreateSchema.safeParse({ nome: 'User', login: 'user@example.invalid', senha: over72Bytes, nivelAcesso: 'EDITOR' }).success, false);
   assert.equal(usuarioPasswordResetSchema.safeParse({ senha: over72Bytes }).success, false);
 });
+
+test('usuario create/update require an email login but sign-in does not', () => {
+  const base = { nome: 'A', senha: 'Strong-pass1!', nivelAcesso: 'EDITOR' as const };
+  assert.equal(usuarioCreateSchema.safeParse({ ...base, login: 'admin' }).success, false);
+  assert.equal(usuarioCreateSchema.safeParse({ ...base, login: 'fake@escola.local' }).success, true);
+  assert.equal(usuarioUpdateSchema.safeParse({ login: 'sem-arroba' }).success, false);
+  assert.equal(usuarioUpdateSchema.parse({ login: ' Novo@Ex.com ' }).login, 'novo@ex.com');
+  assert.equal(loginSchema.safeParse({ login: 'admin', password: 'x' }).success, true);
+});
