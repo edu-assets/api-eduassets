@@ -6,3 +6,4 @@ export * from './usuario.schema.js';
 export * from './emprestimo.schema.js';
 export * from './ocorrencia.schema.js';
 export * from './notificacao.schema.js';
+export * from './sync.schema.js';

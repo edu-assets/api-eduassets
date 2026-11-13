@@ -145,7 +145,7 @@ describe('montarPayload', () => {
       tipo: 'EMPRESTIMO_CRIADO',
       titulo: 'Novo empréstimo',
       corpo: 'João Silva · Notebook ×2, Projetor ×1 · por Ana Souza',
-      url: '/#panel-controle',
+      url: '/#panel-dashboard',
       tag: 'eduassets-emprestimo_criado-7',
       criadoEm: '2026-11-13T12:00:00.000Z',
     });
@@ -153,6 +153,7 @@ describe('montarPayload', () => {
     const devolucao = montarPayload({ tipo: 'DEVOLUCAO_REGISTRADA', autorNome: 'Ana Souza', solicitanteNome: 'João Silva', entidadeId: 8, itens: [{ nome: 'Notebook', quantidade: 2 }] });
     assert.equal(devolucao.titulo, 'Devolução registrada');
     assert.equal(devolucao.corpo, 'João Silva · Notebook ×2 · por Ana Souza');
+    assert.equal(devolucao.url, '/#panel-dashboard');
 
     const ocorrencia = montarPayload({
       tipo: 'OCORRENCIA_REGISTRADA', autorNome: 'Ana Souza', entidadeId: 9, tipoOcorrencia: 'QUEBRADO',
@@ -160,6 +161,14 @@ describe('montarPayload', () => {
     });
     assert.equal(ocorrencia.titulo, 'Nova ocorrência');
     assert.equal(ocorrencia.corpo, 'Notebook ×2 · Quebrado · por Ana Souza');
+    assert.equal(ocorrencia.url, '/#panel-controle');
+  });
+
+  it('points the click target at the panel that shows each event type', () => {
+    const base = { autorNome: 'Ana', entidadeId: 1, itens: [{ nome: 'Notebook', quantidade: 1 }] };
+    assert.equal(montarPayload({ ...base, tipo: 'EMPRESTIMO_CRIADO' }).url, '/#panel-dashboard');
+    assert.equal(montarPayload({ ...base, tipo: 'DEVOLUCAO_REGISTRADA' }).url, '/#panel-dashboard');
+    assert.equal(montarPayload({ ...base, tipo: 'OCORRENCIA_REGISTRADA' }).url, '/#panel-controle');
   });
 
   it('limits the summary to 3 names plus "e mais N" and merges repeated names', () => {
@@ -218,6 +227,7 @@ describe('montarPayload', () => {
     const teste = montarPayloadTeste(new Date('2026-11-13T12:00:00Z'));
     assert.equal(teste.tipo, 'TESTE');
     assert.equal(teste.v, 1);
+    assert.equal(teste.url, '/#panel-inicio');
   });
 });
 

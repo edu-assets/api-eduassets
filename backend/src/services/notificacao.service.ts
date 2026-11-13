@@ -41,7 +41,13 @@ const MAX_NOMES_NO_RESUMO = 3;
 const MAX_LENGTH_NOME = 40;
 const MAX_LENGTH_AUTOR = 60;
 const BATCH_SIZE = 10;
-const PANEL_URL = '/#panel-controle';
+/** Where the notification click lands, per event type (loans and returns live in the dashboard history). */
+const URL_POR_TIPO: Record<TipoEventoNotificacao, string> = {
+  EMPRESTIMO_CRIADO: '/#panel-dashboard',
+  DEVOLUCAO_REGISTRADA: '/#panel-dashboard',
+  OCORRENCIA_REGISTRADA: '/#panel-controle',
+};
+const URL_TESTE = '/#panel-inicio';
 
 const TITULOS: Record<TipoEventoNotificacao, string> = {
   EMPRESTIMO_CRIADO: 'Novo empréstimo',
@@ -100,7 +106,7 @@ export function montarPayload(dados: DadosPayload): PushPayload {
     tipo: dados.tipo,
     titulo: TITULOS[dados.tipo],
     corpo: partes.filter(Boolean).join(' · '),
-    url: PANEL_URL,
+    url: URL_POR_TIPO[dados.tipo],
     tag: `eduassets-${dados.tipo.toLowerCase()}-${dados.entidadeId}`,
     criadoEm: (dados.agora ?? new Date()).toISOString(),
   };
@@ -112,7 +118,7 @@ export function montarPayloadTeste(agora: Date = new Date()): PushPayload {
     tipo: 'TESTE',
     titulo: 'Notificação de teste',
     corpo: 'As notificações estão funcionando neste dispositivo.',
-    url: PANEL_URL,
+    url: URL_TESTE,
     tag: 'eduassets-teste',
     criadoEm: agora.toISOString(),
   };

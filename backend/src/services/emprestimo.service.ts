@@ -20,6 +20,39 @@ export interface EmprestimoCreateInput {
   itens: ItemEmprestimoInput[];
 }
 
+/** Clock-skew tolerance for client-supplied dates: anything further in the future than this is rejected. */
+export const TOLERANCIA_DATA_FUTURA_MS = 5 * 60 * 1000;
+
+function validarNaoFutura(data: Date, agora: number, chaveErro: string): void {
+  if (data.getTime() > agora + TOLERANCIA_DATA_FUTURA_MS) throw new AppError(400, chaveErro);
+}
+
+/** Exported for tests. Only explicit dates are validated; an omitted date is filled in by the server. */
+export function validarDataRetirada(dataRetirada: string | undefined, agora: number = Date.now()): void {
+  if (dataRetirada) validarNaoFutura(new Date(dataRetirada), agora, 'backend.emprestimos.data_retirada_futura');
+}
+
+/** Compares an explicit return date with the stored checkout. The app's picker works in whole minutes, so the
+ * same minute as the checkout is accepted. */
+export function validarDevolucaoPosteriorRetirada(dataDevolucao: string | undefined, dataRetirada: Date): void {
+  if (!dataDevolucao) return;
+  const inicioDoMinutoDaRetirada = Math.floor(dataRetirada.getTime() / 60_000) * 60_000;
+  if (new Date(dataDevolucao).getTime() < inicioDoMinutoDaRetirada) {
+    throw new AppError(400, 'backend.emprestimos.data_devolucao_anterior');
+  }
+}
+
+export function validarDataDevolucao(dataDevolucao: string | undefined, dataRetirada?: Date, agora: number = Date.now()): void {
+  if (!dataDevolucao) return;
+  validarNaoFutura(new Date(dataDevolucao), agora, 'backend.emprestimos.data_devolucao_futura');
+  if (dataRetirada) validarDevolucaoPosteriorRetirada(dataDevolucao, dataRetirada);
+}
+
+/** A client date inside the clock-skew tolerance but still ahead of the server is stored as the server's now. */
+function limitarAoAgora(data: string | undefined): Date {
+  return data ? new Date(Math.min(new Date(data).getTime(), Date.now())) : new Date();
+}
+
 export async function listarEmprestimos() {
   return prisma.emprestimo.findMany({
     include: {
@@ -53,7 +86,8 @@ export async function listarPaginaPublicaEmprestimos(limit: number, cursor?: num
 
 export async function criarEmprestimo(dados: EmprestimoCreateInput, actorId: number) {
   const { solicitanteNome, responsavelId, dataRetirada, observacao, itens } = dados;
-  const dataRetiradaFinal = dataRetirada ? new Date(dataRetirada) : new Date();
+  validarDataRetirada(dataRetirada);
+  const dataRetiradaFinal = limitarAoAgora(dataRetirada);
 
   return runTransaction(async (tx) => {
     const quantidadesSolicitadas = agruparQuantidades(itens);
@@ -135,16 +169,21 @@ export async function atualizarItensEmprestimo(id: number, itens: ItemEmprestimo
 }
 
 export async function devolverEmprestimo(id: number, dataDevolucao: string | undefined, actorId: number) {
+  // Future-date check needs no database; the comparison with the stored dataRetirada happens inside the transaction.
+  validarDataDevolucao(dataDevolucao);
   return runTransaction(async (tx) => {
     await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Emprestimo" WHERE id = ${id} FOR UPDATE`;
     const emprestimoAtual = await tx.emprestimo.findUnique({ where: { id } });
     if (!emprestimoAtual) {
       throw new AppError(404, 'backend.emprestimos.nao_encontrado');
     }
+    // Already-returned loans keep reporting 409 below; an omitted date is never validated (legacy data may have a
+    // retirada slightly ahead of the server clock).
+    if (emprestimoAtual.status === 'ABERTO') validarDevolucaoPosteriorRetirada(dataDevolucao, emprestimoAtual.dataRetirada);
 
     const resultado = await tx.emprestimo.updateMany({
       where: { id, status: 'ABERTO' },
-      data: { status: 'DEVOLVIDO', dataDevolucao: dataDevolucao ? new Date(dataDevolucao) : new Date() },
+      data: { status: 'DEVOLVIDO', dataDevolucao: limitarAoAgora(dataDevolucao) },
     });
 
     if (resultado.count === 0) {

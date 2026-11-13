@@ -7,3 +7,4 @@ export * as emprestimoService from './emprestimo.service.js';
 export * as ocorrenciaService from './ocorrencia.service.js';
 export * as estoqueService from './estoque.service.js';
 export * as notificacaoService from './notificacao.service.js';
+export * as syncService from './sync.service.js';

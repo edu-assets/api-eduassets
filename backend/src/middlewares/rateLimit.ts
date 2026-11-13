@@ -9,6 +9,18 @@ export const globalRateLimiter = rateLimit({
   message: { erro: 'backend.seguranca.muitas_requisicoes' },
 });
 
+/**
+ * GET /sync/estado polling: separate per-IP quota. Many devices sit behind one school NAT, each polling every 30 s
+ * plus focus/push triggers; it has its own quota so it can't starve real operations.
+ */
+export const syncRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 900,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { erro: 'backend.seguranca.muitas_requisicoes' },
+});
+
 export const changePasswordRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 10,

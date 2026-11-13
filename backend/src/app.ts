@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { routes } from './routes/index.js';
+import { syncRouter } from './routes/sync.js';
 import { notFoundHandler } from './middlewares/notFound.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { requestLogger } from './middlewares/requestLogger.js';
@@ -34,6 +35,9 @@ app.use(
 
 app.use(requestLogger);
 app.use(express.json({ limit: '100kb' }));
+// Sync polling is mounted before the global limiter: it has its own quota (syncRateLimiter) and cannot starve
+// real operations. Unmatched /sync/* requests fall through to the global limiter and the normal 404.
+app.use('/sync', syncRouter);
 app.use(globalRateLimiter);
 
 // Liveness: process is running; deliberately does not depend on PostgreSQL.

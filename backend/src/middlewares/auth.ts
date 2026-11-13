@@ -16,6 +16,25 @@ declare global {
   }
 }
 
+/** Header sent by background refreshes so they never count as administrator activity. */
+export const ATIVIDADE_HEADER = 'X-EduAssets-Atividade';
+export const ATIVIDADE_PASSIVA = 'passiva';
+
+/** Route-level switch: marks the request as passive regardless of the header (e.g. the sync polling endpoint). */
+export function marcarPassivo(_req: Request, res: Response, next: NextFunction): void {
+  res.locals.atividadePassiva = true;
+  next();
+}
+
+/**
+ * A passive request keeps every authentication check (user, active flag, sessionVersion, admin idle expiry) and only
+ * skips renewing the idle timer. The header can therefore only shorten an administrator session, never extend it.
+ */
+export function requisicaoPassiva(req: Request, res: Response): boolean {
+  if (res.locals.atividadePassiva === true) return true;
+  return req.get(ATIVIDADE_HEADER)?.trim().toLowerCase() === ATIVIDADE_PASSIVA;
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   const bearerToken = header?.startsWith('Bearer ') ? header.slice(7) : null;
@@ -74,7 +93,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       res.status(401).json({ erro: 'backend.auth.sessao_expirada', sessaoExpirada: true });
       return;
     }
-    registrarAtividadeAdmin(payload.jti);
+    if (!requisicaoPassiva(req, res)) registrarAtividadeAdmin(payload.jti);
   }
 
   // Armazena no req.user o sub e o nível de acesso fresco do banco
