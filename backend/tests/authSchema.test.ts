@@ -50,7 +50,7 @@ test('accepts exactly 72 UTF-8 bytes and rejects 73 across every bcrypt password
 
   assert.equal(loginSchema.safeParse({ login: 'user@example.invalid', password: exactly72Bytes }).success, true);
   assert.equal(loginSchema.safeParse({ login: 'user@example.invalid', password: over72Bytes }).success, false);
-  assert.equal(alterarSenhaSchema.safeParse({ senhaAtual: exactly72Bytes, novaSenha: exactly72Bytes }).success, true);
+  assert.equal(alterarSenhaSchema.safeParse({ senhaAtual: 'Old-password1!', novaSenha: exactly72Bytes }).success, true);
   assert.equal(alterarSenhaSchema.safeParse({ senhaAtual: over72Bytes, novaSenha: exactly72Bytes }).success, false);
   assert.equal(usuarioCreateSchema.safeParse({ nome: 'User', login: 'user@example.invalid', senha: exactly72Bytes, nivelAcesso: 'EDITOR' }).success, true);
   assert.equal(usuarioCreateSchema.safeParse({ nome: 'User', login: 'user@example.invalid', senha: over72Bytes, nivelAcesso: 'EDITOR' }).success, false);
@@ -64,4 +64,22 @@ test('usuario create/update require an email login but sign-in does not', () => 
   assert.equal(usuarioUpdateSchema.safeParse({ login: 'sem-arroba' }).success, false);
   assert.equal(usuarioUpdateSchema.parse({ login: ' Novo@Ex.com ' }).login, 'novo@ex.com');
   assert.equal(loginSchema.safeParse({ login: 'admin', password: 'x' }).success, true);
+});
+
+test('alterarSenhaSchema applies senhaForte to the new password', () => {
+  const atual = 'Old-password1!';
+  assert.equal(alterarSenhaSchema.safeParse({ senhaAtual: atual, novaSenha: 'New-password2@' }).success, true);
+  for (const fraca of ['alllowercase123!', 'ALLUPPERCASE123!', 'NoDigitsHere!!!', 'NoSpecial12345A', 'Sh0rt!Aa']) {
+    assert.equal(alterarSenhaSchema.safeParse({ senhaAtual: atual, novaSenha: fraca }).success, false, fraca);
+  }
+});
+
+test('alterarSenhaSchema rejects a new password equal to the current one', () => {
+  const same = 'Same-password1!';
+  const r = alterarSenhaSchema.safeParse({ senhaAtual: same, novaSenha: same });
+  assert.equal(r.success, false);
+  if (!r.success) {
+    assert.deepEqual(r.error.issues[0].path, ['novaSenha']);
+    assert.equal(r.error.issues[0].message, 'A nova senha deve ser diferente da senha atual.');
+  }
 });

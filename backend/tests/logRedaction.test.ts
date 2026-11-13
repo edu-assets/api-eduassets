@@ -20,3 +20,11 @@ test('removes one-time codes and PII from logged URL queries but keeps harmless 
   assert.doesNotMatch(safe, /one-time-secret|person|example\.invalid/);
   assert.match(safe, /limit=10/);
 });
+
+test('redacts free-text history searches but keeps harmless filters', () => {
+  const safe = sanitizeUrlForLog('/emprestimos?paginado=1&limit=50&status=ABERTO&q=Maria%20Silva&busca=Ana');
+  assert.doesNotMatch(safe, /Maria|Ana/);
+  assert.match(safe, /paginado=1/);
+  assert.match(safe, /status=ABERTO/);
+  assert.match(safe, /q=%5BREDACTED%5D/);
+});

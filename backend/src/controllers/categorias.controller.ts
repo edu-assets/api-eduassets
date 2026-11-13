@@ -11,6 +11,11 @@ export async function listar(req: Request, res: Response): Promise<void> {
   res.json((await categoriasService.listarCategoriasPublicas()).map(publicCategory));
 }
 
+export async function atualizar(req: Request, res: Response): Promise<void> {
+  const atualizada = await categoriasService.atualizarCategoria(Number(req.params.id), req.body.nome, req.user!.sub);
+  res.json(atualizada);
+}
+
 export async function criar(req: Request, res: Response): Promise<void> {
   const { nome } = req.body;
   const criada = await categoriasService.criarCategoria(nome, req.user!.sub);

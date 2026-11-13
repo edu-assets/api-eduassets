@@ -133,8 +133,22 @@ test('Guest Mode has endpoint-specific allowlists and cannot mutate records', as
     const olderPage = await api(`/emprestimos?limit=1&cursor=${loans.body.nextCursor}`);
     assert.equal(olderPage.status, 200);
     assert.ok(olderPage.body.items.length <= 1);
-    if (olderPage.body.items.length) assert.ok(olderPage.body.items[0].id < loan.id);
+    if (olderPage.body.items.length) {
+      // History order: dataRetirada DESC, id DESC (the cursor is the last id of the previous page).
+      const last = loans.body.items.at(-1);
+      const next = olderPage.body.items[0];
+      const lastTime = Date.parse(last.dataRetirada);
+      const nextTime = Date.parse(next.dataRetirada);
+      assert.ok(nextTime < lastTime || (nextTime === lastTime && next.id < last.id));
+    }
   }
+  const guestSearch = await api(`/emprestimos?q=${encodeURIComponent('Synthetic borrower')}`);
+  assert.equal(guestSearch.status, 400, 'Guests cannot search personal names.');
+  assert.deepEqual(guestSearch.body.detalhes, [{ campo: 'q', mensagem: 'A busca por texto exige autenticação.' }]);
+  const guestOpen = await api('/emprestimos?status=ABERTO&limit=100');
+  assert.equal(guestOpen.status, 200);
+  assert.ok(guestOpen.body.items.every((item: Json) => item.status === 'ABERTO'));
+  assert.ok(guestOpen.body.items.some((item: Json) => item.id === sampleLoan.body.id));
   const equipment = await api('/equipamentos');
   const publicEquipment = equipment.body.find((item: Json) => item.id === rows.equipmentId);
   assert.equal(publicEquipment.modelo, `Synthetic equipment ${marker}`);
@@ -342,6 +356,78 @@ test('simultaneous occurrence resolution changes inventory exactly once', async 
   assert.equal(equipment.quantidadeQuebrada, 0);
 });
 
+test('loan history: legacy array, open-loan array and filtered keyset pages per role', async () => {
+  const historyName = `Synthetic history ${marker}`;
+  const create = async (dataRetirada: string, equipamentoId: number) => {
+    const created = await api('/emprestimos', json('POST', {
+      solicitanteNome: historyName, responsavelId: rows.responsibleId, dataRetirada,
+      itens: [{ equipamentoId, quantidade: 1 }],
+    }), adminToken);
+    assert.equal(created.status, 201);
+    rows.loanIds.push(created.body.id);
+    return created.body.id as number;
+  };
+  // b and c share dataRetirada: the id tie-breaker must order them c, b.
+  const a = await create('2025-01-10T12:00:00.000Z', rows.secondEquipmentId!);
+  const b = await create('2025-01-15T12:00:00.000Z', rows.equipmentId!);
+  const c = await create('2025-01-15T12:00:00.000Z', rows.equipmentId!);
+  const mine = (items: Json[]) => items.filter((item) => [a, b, c].includes(item.id as number)).map((item) => item.id);
+
+  // Legacy contract of the deployed app: no parameters (and limit/cursor) -> full array.
+  for (const path of ['/emprestimos', '/emprestimos?limit=1&cursor=1']) {
+    const legacy = await api(path, {}, adminToken);
+    assert.equal(legacy.status, 200);
+    assert.ok(Array.isArray(legacy.body), `${path} must stay an array for authenticated users`);
+    assert.deepEqual(mine(legacy.body).sort(), [a, b, c].sort());
+  }
+  const open = await api('/emprestimos?status=ABERTO', {}, adminToken);
+  assert.equal(open.status, 200);
+  assert.ok(Array.isArray(open.body));
+  assert.ok(open.body.every((item: Json) => item.status === 'ABERTO'));
+  assert.deepEqual(mine(open.body).sort(), [a, b, c].sort());
+
+  const q = encodeURIComponent(historyName.toUpperCase());
+  const first = await api(`/emprestimos?paginado=1&limit=2&q=${q}`, {}, adminToken);
+  assert.equal(first.status, 200);
+  assert.deepEqual(Object.keys(first.body).sort(), ['items', 'limit', 'nextCursor']);
+  assert.deepEqual(first.body.items.map((item: Json) => item.id), [c, b]);
+  assert.equal(first.body.nextCursor, b);
+  assert.equal(first.body.limit, 2);
+  assert.deepEqual(first.body.items[0].criadoPor, { id: rows.userId, nome: 'Synthetic Administrator' });
+  assert.equal(first.body.items[0].solicitanteNome, historyName);
+  const second = await api(`/emprestimos?paginado=1&limit=2&q=${q}&cursor=${first.body.nextCursor}`, {}, adminToken);
+  assert.deepEqual(second.body.items.map((item: Json) => item.id), [a]);
+  assert.equal(second.body.nextCursor, null);
+
+  const day = await api(`/emprestimos?paginado=1&q=${q}&de=2025-01-15&ate=2025-01-15`, {}, adminToken);
+  assert.deepEqual(day.body.items.map((item: Json) => item.id), [c, b]);
+  const returnedOnly = await api(`/emprestimos?paginado=1&q=${q}&status=DEVOLVIDO`, {}, adminToken);
+  assert.deepEqual(returnedOnly.body.items, []);
+  const byEquipment = await api(`/emprestimos?paginado=1&limit=100&q=${encodeURIComponent(`equipment 2 ${marker}`)}`, {}, adminToken);
+  assert.ok(byEquipment.body.items.some((item: Json) => item.id === a));
+  assert.equal(byEquipment.body.items.some((item: Json) => item.id === b), false);
+  assert.equal((await api('/emprestimos?paginado=1&de=2025-01-16&ate=2025-01-15', {}, adminToken)).status, 400);
+  assert.equal((await api('/emprestimos?paginado=1&cursor=2147483647', {}, adminToken)).status, 400);
+
+  // Guest: same pages and filters, masked DTO, no text search.
+  const guestDay = await api('/emprestimos?status=ABERTO&de=2025-01-15T00:00:00Z&ate=2025-01-15T23:59:59.999Z&limit=100');
+  assert.equal(guestDay.status, 200);
+  assert.deepEqual(mine(guestDay.body.items), [c, b]);
+  assertNoAuthorship(guestDay.body);
+  assert.equal(JSON.stringify(guestDay.body).includes(historyName), false);
+  assert.equal((await api(`/emprestimos?paginado=1&q=${q}`)).status, 400);
+
+  // Responsible people carry the additive ativo flag and the list still returns everyone.
+  const people = await api('/responsaveis', {}, adminToken);
+  assert.equal(people.status, 200);
+  assert.equal(people.body.find((item: Json) => item.id === rows.responsibleId).ativo, true);
+
+  for (const id of [a, b, c]) {
+    const returned = await api(`/emprestimos/${id}/devolver`, json('PATCH', {}), adminToken);
+    assert.equal(returned.status, 200);
+  }
+});
+
 const AUTHOR_KEYS = ['criadoPor', 'criadoPorId', 'atualizadoPor', 'atualizadoPorId', 'atualizadoEm',
   'devolvidoPor', 'devolvidoPorId', 'resolvidoPor', 'resolvidoPorId'];
 function assertNoAuthorship(value: unknown, path = 'body'): void {
@@ -451,6 +537,60 @@ test('record authorship is written on create/update/return/resolve and shown onl
     assertNoAuthorship(guest.body);
     assert.equal(JSON.stringify(guest.body).includes(author.nome), false, `${path} leaked an author name`);
   }
+});
+
+test('category rename and responsible deactivation: validation, conflicts, audit and loan guard', async () => {
+  const category = await api('/categorias', json('POST', { nome: `Synthetic rename A ${marker}` }), adminToken);
+  const other = await api('/categorias', json('POST', { nome: `Synthetic rename B ${marker}` }), adminToken);
+  rows.extraCategoryIds.push(category.body.id, other.body.id);
+
+  assert.equal((await api(`/categorias/${category.body.id}`, json('PATCH', { nome: 'x' }))).status, 401);
+  assert.equal((await api(`/categorias/${category.body.id}`, json('PATCH', { nome: '   ' }), adminToken)).status, 400);
+  assert.equal((await api(`/categorias/${category.body.id}`, json('PATCH', {}), adminToken)).status, 400);
+  assert.equal((await api('/categorias/2147483646', json('PATCH', { nome: 'Nope' }), adminToken)).status, 404);
+  const clash = await api(`/categorias/${category.body.id}`, json('PATCH', { nome: `Synthetic rename B ${marker}` }), adminToken);
+  assert.equal(clash.status, 409);
+  assert.equal(clash.body.erro, 'backend.categorias.nome_duplicado');
+  const renamed = await api(`/categorias/${category.body.id}`, json('PATCH', { nome: `  Synthetic renamed ${marker}  ` }), adminToken);
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.body.nome, `Synthetic renamed ${marker}`);
+  assert.equal(await prisma.auditLog.count({ where: { entity: 'Categoria', entityId: String(category.body.id), action: 'UPDATE' } }), 1);
+
+  const person = await api('/responsaveis', json('POST', { nome: 'Synthetic Toggle Responsible', cargo: 'Test fixture' }), adminToken);
+  rows.extraResponsibleIds.push(person.body.id);
+  const pid = person.body.id;
+  assert.equal((await api(`/responsaveis/${pid}`, json('PATCH', { nome: 'x' }))).status, 401);
+  assert.equal((await api(`/responsaveis/${pid}`, json('PATCH', {}), adminToken)).status, 400);
+  assert.equal((await api(`/responsaveis/${pid}`, json('PATCH', { id: 1 }), adminToken)).status, 400);
+  assert.equal((await api('/responsaveis/2147483646', json('PATCH', { ativo: false }), adminToken)).status, 404);
+
+  const openLoan = await api('/emprestimos', json('POST', {
+    solicitanteNome: `Synthetic inactive guard ${marker}`, responsavelId: pid, itens: [{ equipamentoId: rows.equipmentId, quantidade: 1 }],
+  }), adminToken);
+  assert.equal(openLoan.status, 201);
+  rows.loanIds.push(openLoan.body.id);
+
+  const off = await api(`/responsaveis/${pid}`, json('PATCH', { cargo: 'Synthetic new role', ativo: false }), adminToken);
+  assert.equal(off.status, 200);
+  assert.equal(off.body.ativo, false);
+  assert.equal(off.body.cargo, 'Synthetic new role');
+  const audit = await prisma.auditLog.findFirstOrThrow({ where: { entity: 'Responsavel', entityId: String(pid), action: 'UPDATE' } });
+  assert.deepEqual([...audit.changedFields].sort(), ['ativo', 'cargo']);
+
+  const blocked = await api('/emprestimos', json('POST', {
+    solicitanteNome: `Synthetic blocked ${marker}`, responsavelId: pid, itens: [{ equipamentoId: rows.equipmentId, quantidade: 1 }],
+  }), adminToken);
+  assert.equal(blocked.status, 409);
+  assert.equal(blocked.body.erro, 'backend.emprestimos.responsavel_inativo');
+
+  // The default list hides inactive people; admins can opt in; the existing open loan is unaffected and can be returned.
+  assert.equal((await api('/responsaveis', {}, adminToken)).body.some((item: Json) => item.id === pid), false);
+  const all = await api('/responsaveis?incluirInativos=true', {}, adminToken);
+  assert.equal(all.body.find((item: Json) => item.id === pid).ativo, false);
+  assert.equal((await api(`/emprestimos/${openLoan.body.id}/devolver`, json('PATCH', {}), adminToken)).status, 200);
+
+  assert.equal((await api(`/responsaveis/${pid}`, json('PATCH', { ativo: true }), adminToken)).body.ativo, true);
+  assert.equal((await api('/responsaveis', {}, adminToken)).body.some((item: Json) => item.id === pid), true);
 });
 
 test('self-service password recovery sends a single-use link and revokes existing sessions', async () => {

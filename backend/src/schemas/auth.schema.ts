@@ -10,7 +10,10 @@ export const loginSchema = z.object({
 
 export const alterarSenhaSchema = z.object({
   senhaAtual: z.string().min(1, 'Informe a senha atual.').max(200).refine(senhaAte72Bytes, 'A senha deve ter no máximo 72 bytes em UTF-8.'),
-  novaSenha: z.string().min(12, 'A nova senha deve ter no mínimo 12 caracteres.').max(200).refine(senhaAte72Bytes, 'A senha deve ter no máximo 72 bytes em UTF-8.'),
+  novaSenha: z.string().max(200).refine(senhaForte, 'A senha deve ter 12 ou mais caracteres fortes e no máximo 72 bytes em UTF-8.'),
+}).refine((d) => d.novaSenha !== d.senhaAtual, {
+  path: ['novaSenha'],
+  message: 'A nova senha deve ser diferente da senha atual.',
 });
 
 export const rfidScanSchema = z.object({

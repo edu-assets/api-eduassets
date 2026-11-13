@@ -1,5 +1,6 @@
 const SENSITIVE_FIELD = /(?:authorization|cookie|password|senha|token|secret|credential|api[_-]?key|rfid|session|email|login|student|solicitante|responsavel|cpf|telefone|phone)/i;
-const SENSITIVE_QUERY_KEY = /(?:authorization|cookie|password|senha|token|secret|credential|api[_-]?key|rfid|session|code|email|login|student|solicitante|responsavel|cpf|telefone|phone)/i;
+// `q`/`busca` carry free-text history searches, which usually contain people's names.
+const SENSITIVE_QUERY_KEY = /(?:^q$|^busca$|authorization|cookie|password|senha|token|secret|credential|api[_-]?key|rfid|session|code|email|login|student|solicitante|responsavel|cpf|telefone|phone)/i;
 
 export function redactLogText(value: string): string {
   return value

@@ -45,6 +45,8 @@ model Responsavel {
   id          Int          @id @default(autoincrement())
   nome        String
   cargo       String
+  /// Inactive responsible people stay referenced by historical loans but are hidden from new-loan pickers.
+  ativo       Boolean      @default(true)
   criadoPorId Int?
   emprestimos Emprestimo[]
   criadoPor   Usuario?     @relation("ResponsavelCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
@@ -122,6 +124,8 @@ model Emprestimo {
   itens           ItemEmprestimo[]
 
   @@index([status])
+  // Loan history pages: ORDER BY "dataRetirada" DESC, id DESC with a keyset cursor and de/ate range filters.
+  @@index([dataRetirada, id])
   @@index([criadoPorId])
   @@index([atualizadoPorId])
   @@index([devolvidoPorId])
