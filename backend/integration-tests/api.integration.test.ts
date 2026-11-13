@@ -180,7 +180,8 @@ test('explicitly seeded administrator can authenticate in a configured integrati
 });
 
 test('invalid current password is a business error and the authenticated cookie session remains valid', async () => {
-  const response = await api('/auth/senha', json('PATCH', { senhaAtual: 'wrong-password', novaSenha: 'new-password-123' }), adminToken);
+  // novaSenha must satisfy senhaForte (1.5.0) so the request reaches the current-password check (422), not schema validation (400).
+  const response = await api('/auth/senha', json('PATCH', { senhaAtual: 'wrong-password', novaSenha: 'Synthetic-New-Password-03' }), adminToken);
   assert.equal(response.status, 422);
   const stillValid = await api('/auth/me', {}, adminToken);
   assert.equal(stillValid.status, 200);
