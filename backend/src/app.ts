@@ -9,6 +9,7 @@ import { securityHeaders, globalRateLimiter } from './middlewares/security.js';
 import { getRuntimeConfig } from './config/runtimeConfig.js';
 import { prisma } from './lib/prisma.js';
 import { checkReadiness } from './lib/readiness.js';
+import { coletarMudancasDaRequisicao } from './lib/changeFeed.js';
 
 export const app = express();
 
@@ -35,6 +36,9 @@ app.use(
 
 app.use(requestLogger);
 app.use(express.json({ limit: '100kb' }));
+// Collects entities changed by the request and publishes them to the in-memory sync feed after the response.
+// Must come after the body parser: stream callbacks there would run outside the AsyncLocalStorage context.
+app.use(coletarMudancasDaRequisicao);
 // Sync polling is mounted before the global limiter: it has its own quota (syncRateLimiter) and cannot starve
 // real operations. Unmatched /sync/* requests fall through to the global limiter and the normal 404.
 app.use('/sync', syncRouter);

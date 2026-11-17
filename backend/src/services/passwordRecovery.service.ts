@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
+import { invalidarUsuarioSessao } from '../lib/sessionUserCache.js';
 import { AppError } from '../errors/AppError.js';
 import { writeAuditLog } from '../lib/auditLog.js';
 import { sendMail } from '../lib/mailer.js';
@@ -50,7 +51,7 @@ export async function solicitarRecuperacao(login: string, idioma: Idioma = 'pt')
   const normalizado = normalizarLogin(login);
   if (!EMAIL_PATTERN.test(normalizado)) return false;
   const usuario = await prisma.usuario.findFirst({
-    where: { login: { equals: normalizado, mode: 'insensitive' }, ativo: true },
+    where: { login: normalizado, ativo: true }, // stored normalized: exact match uses the unique index
     select: { id: true, nome: true, login: true },
   });
   if (!usuario) return false;
@@ -89,6 +90,7 @@ export async function redefinirSenhaComToken(token: string, senha: string): Prom
   // Hash first so valid and invalid tokens take comparable time.
   const novoHash = await bcrypt.hash(senha, 12);
   const agora = new Date();
+  let usuarioAlterado: number | null = null;
   await prisma.$transaction(async (tx) => {
     const registro = await tx.passwordResetToken.findUnique({
       where: { tokenHash },
@@ -100,6 +102,7 @@ export async function redefinirSenhaComToken(token: string, senha: string): Prom
     const consumido = await tx.passwordResetToken.updateMany({ where: { id: registro.id, usedAt: null }, data: { usedAt: agora } });
     if (consumido.count !== 1) throw new AppError(400, LINK_INVALIDO);
 
+    usuarioAlterado = registro.usuarioId;
     await tx.usuario.update({
       where: { id: registro.usuarioId },
       data: { passwordHash: novoHash, sessionVersion: { increment: 1 } },
@@ -107,5 +110,7 @@ export async function redefinirSenhaComToken(token: string, senha: string): Prom
     await tx.passwordResetToken.deleteMany({ where: { usuarioId: registro.usuarioId, id: { not: registro.id } } });
     await tx.pushSubscription.deleteMany({ where: { usuarioId: registro.usuarioId } });
     await writeAuditLog(tx, registro.usuarioId, 'PASSWORD_RESET_SELF', 'Usuario', registro.usuarioId, ['passwordHash', 'sessionVersion']);
+  }).finally(() => {
+    if (usuarioAlterado !== null) invalidarUsuarioSessao(usuarioAlterado);
   });
 }

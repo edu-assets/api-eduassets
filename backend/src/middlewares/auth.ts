@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { verifyToken, AppJwtPayload } from '../lib/jwt.js';
 import { clearSessionCookie, getSessionCookieToken } from '../lib/sessionCookie.js';
 import { isTrustedOrigin } from './csrf.js';
-import { prisma } from '../lib/prisma.js';
+import { obterUsuarioSessao } from '../lib/sessionUserCache.js';
 import {
   registrarAtividadeAdmin,
   sessaoAdminExpirada,
@@ -62,11 +62,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  // Verifica se o usuário ainda existe no banco de dados e obtém o nível de acesso atual
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: payload.sub },
-    select: { id: true, nivelAcesso: true, sessionVersion: true, ativo: true },
-  });
+  // Verifica se o usuário ainda existe e obtém o nível de acesso atual. Leituras usam o cache em
+  // memória (sessionUserCache.ts) para não acordar o banco a cada polling; escritas sempre leem o banco.
+  const usuario = await obterUsuarioSessao(payload.sub, { fresco: isMutatingMethod });
 
   if (!usuario) {
     if (usingCookie) clearSessionCookie(req, res);

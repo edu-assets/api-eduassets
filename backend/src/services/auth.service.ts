@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
+import { invalidarUsuarioSessao } from '../lib/sessionUserCache.js';
 import { signToken } from '../lib/jwt.js';
 import { AppError } from '../errors/AppError.js';
 import { hashRfidToken, safeCompareSecrets } from '../lib/rfidToken.js';
@@ -37,7 +38,8 @@ async function obterSenhaAlteradaEm(usuarioId: number): Promise<string | null> {
 export async function login(loginStr: string, password: string) {
   const loginNormalizado = loginStr.trim().toLowerCase();
   const usuario = await prisma.usuario.findFirst({
-    where: { login: { equals: loginNormalizado, mode: 'insensitive' } },
+    // Logins are always stored normalized (normalizarLogin, seedConfig), so exact equality uses the unique index.
+    where: { login: loginNormalizado },
   });
   if (!usuario) {
     await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
@@ -117,7 +119,7 @@ export async function alterarSenha(usuarioId: number, senhaAtual: string, novaSe
     await tx.pushSubscription.deleteMany({ where: { usuarioId: usuario.id } });
     await writeAuditLog(tx, usuario.id, 'PASSWORD_CHANGE', 'Usuario', usuario.id, ['passwordHash', 'sessionVersion']);
     return changed;
-  });
+  }).finally(() => invalidarUsuarioSessao(usuario.id));
   // Reissue only the current session at the new version; other sessions are revoked.
   return signToken({ sub: updated.id, nivelAcesso: updated.nivelAcesso, sessionVersion: updated.sessionVersion });
 }
@@ -129,7 +131,7 @@ export async function logout(usuarioId: number): Promise<void> {
       data: { sessionVersion: { increment: 1 } },
     });
     await writeAuditLog(tx, usuarioId, 'LOGOUT', 'Usuario', usuarioId, ['sessionVersion']);
-  });
+  }).finally(() => invalidarUsuarioSessao(usuarioId));
 }
 
 export async function loginRfid(

@@ -646,3 +646,21 @@ test('self-service password recovery sends a single-use link and revokes existin
     await prisma.usuario.delete({ where: { id: user.id } });
   }
 });
+
+test('a committed mutation is reported by /sync/estado without querying the audit log', async () => {
+  const before = await api('/sync/estado', {}, adminToken);
+  assert.equal(before.status, 200);
+  assert.match(before.body.cursor, /^\d{1,10}$/);
+
+  // Real service + Prisma interactive transaction: the AsyncLocalStorage collector must survive it.
+  const created = await api('/categorias', json('POST', { nome: `Synthetic sync feed ${marker}` }), adminToken);
+  assert.equal(created.status, 201);
+  rows.extraCategoryIds.push(created.body.id);
+
+  const after = await api(`/sync/estado?desde=${before.body.cursor}`, {}, adminToken);
+  assert.equal(after.status, 200);
+  assert.deepEqual(after.body.entidades, ['Categoria']);
+  assert.ok(Number(after.body.cursor) > Number(before.body.cursor));
+  const again = await api(`/sync/estado?desde=${after.body.cursor}`, {}, adminToken);
+  assert.deepEqual(again.body.entidades, []);
+});

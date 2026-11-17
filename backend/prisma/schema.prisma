@@ -34,10 +34,10 @@ model Equipamento {
   itensEmprestimo      ItemEmprestimo[]
   ocorrencias          Ocorrencia[]
 
-  @@index([quantidadeDisponivel])
-  @@index([quantidadeQuebrada])
   @@index([criadoPorId])
   @@index([atualizadoPorId])
+  // No indexes on quantidadeDisponivel/quantidadeQuebrada: unused, and they changed on every stock update
+  // (migration 20261117090000_drop_unused_stock_indexes).
   // Database CHECK constraints are declared in the versioned SQL migration (Prisma 6 has no schema attribute for CHECK).
 }
 

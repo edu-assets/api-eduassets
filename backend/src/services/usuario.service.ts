@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
+import { invalidarUsuarioSessao } from '../lib/sessionUserCache.js';
 import { AppError } from '../errors/AppError.js';
 import { gerarRfidToken, hashRfidToken } from '../lib/rfidToken.js';
 import { logger } from '../lib/logger.js';
@@ -41,7 +42,8 @@ export async function listarUsuarios() {
 
 export async function criarUsuario(dados: UsuarioCreateSchemaInput, actorId: number) {
   const login = normalizarLogin(dados.login);
-  const existente = await prisma.usuario.findFirst({ where: { login: { equals: login, mode: 'insensitive' } }, select: { id: true } });
+  // Logins are stored normalized and LOWER(login) is unique in the database, so exact equality is enough here.
+  const existente = await prisma.usuario.findFirst({ where: { login }, select: { id: true } });
   if (existente) throw new AppError(409, 'backend.geral.registro_duplicado');
   const passwordHash = await bcrypt.hash(dados.senha, 12);
   try {
@@ -94,6 +96,8 @@ export async function atualizarUsuario(id: number, dados: UsuarioUpdateSchemaInp
   } catch (error) {
     if (isUniqueConflict(error)) throw new AppError(409, 'backend.geral.registro_duplicado');
     throw error;
+  } finally {
+    invalidarUsuarioSessao(id);
   }
 }
 
@@ -103,7 +107,7 @@ export async function resetarSenhaUsuario(id: number, senha: string, actorId: nu
     await tx.usuario.update({ where: { id }, data: { passwordHash, sessionVersion: { increment: 1 }, updatedById: actorId } });
     await tx.pushSubscription.deleteMany({ where: { usuarioId: id } });
     await writeAudit(tx, actorId, 'PASSWORD_RESET', id, ['senha', 'sessionVersion']);
-  });
+  }).finally(() => invalidarUsuarioSessao(id));
 }
 
 export async function provisionarCartaoRfid(id: number, actorId: number) {

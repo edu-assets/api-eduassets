@@ -11,7 +11,7 @@ export async function estado(req: Request, res: Response): Promise<void> {
     });
     return;
   }
-  const { cursor, entidades } = await syncService.obterEstadoSync(query.data.desde);
+  const { cursor, entidades } = syncService.obterEstadoSync(query.data.desde);
   // Computed as late as possible so clients can estimate their clock offset from the response.
   res.json({ serverTime: new Date().toISOString(), cursor, entidades });
 }
