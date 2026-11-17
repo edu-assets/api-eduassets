@@ -12,6 +12,9 @@ TLS_HOSTS="${TLS_HOSTS:-api.eduassets.tech app.eduassets.tech eduassets.tech doc
 TLS_MIN_DAYS="${TLS_MIN_DAYS:-14}"
 SECURITY_TXT_MIN_DAYS="${SECURITY_TXT_MIN_DAYS:-30}"
 RETRIES="${RETRIES:-3}"
+# /ready runs a database query and wakes the Neon compute (billed per awake time). The scheduled
+# workflow sets CHECK_READY=false on its frequent runs; it defaults to true for manual use.
+CHECK_READY="${CHECK_READY:-true}"
 
 for tool in curl openssl date; do
   command -v "$tool" >/dev/null || { echo "$tool is required." >&2; exit 2; }
@@ -90,7 +93,10 @@ check_security_txt() {
 
 echo "eduAssets public uptime check - $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 check_http 'API liveness /health' "$API_URL/health" '"status":"ok"'
-check_http 'API readiness /ready (database)' "$API_URL/ready" '"status":"ready"'
+case "$CHECK_READY" in
+  true | 1) check_http 'API readiness /ready (database)' "$API_URL/ready" '"status":"ready"' ;;
+  *) echo 'SKIP  API readiness /ready (database): not in the readiness window' ;;
+esac
 check_http 'App' "$APP_URL/"
 check_http 'Landing page' "$SITE_URL/"
 check_http 'Documentation host' "$DOCS_PROBE_URL"

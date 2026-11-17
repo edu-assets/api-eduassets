@@ -45,8 +45,11 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    # Liveness only: /health never touches the database. Probing /ready (SELECT 1) every 30 s kept the
+    # Neon compute awake 24/7, because Neon only scales to zero after ~5 idle minutes. /ready is still
+    # used by the deploy gate (deploy/scripts/auto-deploy.sh) and the daytime external uptime check.
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
