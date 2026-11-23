@@ -200,6 +200,8 @@ describe('services write the author inside the audited transaction', () => {
   it('loan create sets criadoPorId and stock decrements do not touch the equipment editor', async () => {
     const t = criarTx({
       'equipamento.findMany': () => [{ ...equipamento, quantidadeDisponivel: 10 }],
+      'ocorrencia.findMany': () => [],
+      'itemEmprestimo.findMany': () => [],
       'emprestimo.create': () => ({ id: 12, itens: [] }),
     });
     await m.emprestimos.criarEmprestimo({ solicitanteNome: 'X', responsavelId: 2, itens: [{ equipamentoId: 1, quantidade: 1 }] }, ACTOR);
@@ -215,8 +217,10 @@ describe('services write the author inside the audited transaction', () => {
 
   it('loan item edit sets atualizadoPorId and atualizadoEm', async () => {
     const t = criarTx({
-      'emprestimo.findUnique': () => ({ id: 12, status: 'ABERTO' }),
-      'itemEmprestimo.findMany': () => [{ equipamentoId: 1, quantidade: 1 }],
+      'emprestimo.findUnique': () => ({ id: 12, status: 'ABERTO', dataPrevistaDevolucao: null }),
+      // The loan's own lines (where.emprestimoId) vs. the availability query (other open loans and schedules).
+      'itemEmprestimo.findMany': (args) => (args.where.emprestimoId === 12 ? [{ equipamentoId: 1, quantidade: 1 }] : []),
+      'ocorrencia.findMany': () => [],
       'equipamento.findMany': () => [{ ...equipamento, quantidadeDisponivel: 10 }],
     });
     const antes = Date.now();

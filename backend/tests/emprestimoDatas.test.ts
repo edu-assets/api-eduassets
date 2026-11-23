@@ -6,8 +6,8 @@ import {
   TOLERANCIA_DATA_FUTURA_MS,
   criarEmprestimo,
   devolverEmprestimo,
+  planejarRetirada,
   validarDataDevolucao,
-  validarDataRetirada,
 } from '../src/services/emprestimo.service.js';
 
 const AGORA = Date.parse('2026-11-12T22:20:00.000Z');
@@ -28,13 +28,20 @@ describe('date validation helpers', () => {
     assert.equal(TOLERANCIA_DATA_FUTURA_MS, 5 * 60 * 1000);
   });
 
-  it('rejects a future dataRetirada beyond the tolerance and accepts the boundary and the past', () => {
-    const erro = erroDe(() => validarDataRetirada(iso(TOLERANCIA_DATA_FUTURA_MS + 1), AGORA));
+  it('treats a dataRetirada beyond the tolerance as a schedule and the boundary, the past and none as immediate', () => {
+    // Beyond the tolerance a schedule needs an expected return; it is no longer a "future date" error.
+    const erro = erroDe(() => planejarRetirada(iso(TOLERANCIA_DATA_FUTURA_MS + 1), undefined, AGORA));
     assert.equal(erro.status, 400);
-    assert.equal(erro.chaveI18n, 'backend.emprestimos.data_retirada_futura');
-    assert.doesNotThrow(() => validarDataRetirada(iso(TOLERANCIA_DATA_FUTURA_MS), AGORA));
-    assert.doesNotThrow(() => validarDataRetirada(iso(-30 * 24 * 3600_000), AGORA));
-    assert.doesNotThrow(() => validarDataRetirada(undefined, AGORA));
+    assert.equal(erro.chaveI18n, 'backend.emprestimos.devolucao_prevista_obrigatoria');
+    const agendado = planejarRetirada(iso(TOLERANCIA_DATA_FUTURA_MS + 1), iso(3600_000), AGORA);
+    assert.equal(agendado.agendado, true);
+    assert.equal(agendado.dataRetirada.toISOString(), iso(TOLERANCIA_DATA_FUTURA_MS + 1), 'schedules are never clamped');
+
+    const limite = planejarRetirada(iso(TOLERANCIA_DATA_FUTURA_MS), undefined, AGORA);
+    assert.equal(limite.agendado, false);
+    assert.equal(limite.dataRetirada.getTime(), AGORA, 'inside the tolerance the checkout is clamped to now');
+    assert.equal(planejarRetirada(iso(-30 * 24 * 3600_000), undefined, AGORA).dataRetirada.toISOString(), iso(-30 * 24 * 3600_000));
+    assert.equal(planejarRetirada(undefined, undefined, AGORA).dataRetirada.getTime(), AGORA);
   });
 
   it('rejects a future dataDevolucao beyond the tolerance', () => {
@@ -84,12 +91,34 @@ describe('criarEmprestimo date validation', () => {
 
   const base = { solicitanteNome: 'Ana', responsavelId: 1, itens: [{ equipamentoId: 1, quantidade: 1 }] };
 
-  it('rejects a future dataRetirada before opening any transaction', async () => {
+  const rejeitaCom = (chave: string) => (error: unknown) =>
+    error instanceof AppError && error.status === 400 && error.chaveI18n === chave;
+
+  it('rejects invalid schedules before opening any transaction', async () => {
+    const daqui = (ms: number) => new Date(Date.now() + ms).toISOString();
     await assert.rejects(
-      criarEmprestimo({ ...base, dataRetirada: new Date(Date.now() + 10 * 60_000).toISOString() }, 1),
-      (error: unknown) => error instanceof AppError && error.status === 400 && error.chaveI18n === 'backend.emprestimos.data_retirada_futura',
+      criarEmprestimo({ ...base, dataRetirada: daqui(10 * 60_000) }, 1),
+      rejeitaCom('backend.emprestimos.devolucao_prevista_obrigatoria'),
+    );
+    await assert.rejects(
+      criarEmprestimo({ ...base, dataRetirada: daqui(16 * 24 * 3600_000), dataPrevistaDevolucao: daqui(16 * 24 * 3600_000 + 3600_000) }, 1),
+      rejeitaCom('backend.emprestimos.data_retirada_alem_horizonte'),
+    );
+    await assert.rejects(
+      criarEmprestimo({ ...base, dataRetirada: daqui(3600_000), dataPrevistaDevolucao: daqui(3600_000) }, 1),
+      rejeitaCom('backend.emprestimos.devolucao_prevista_invalida'),
+    );
+    await assert.rejects(
+      criarEmprestimo({ ...base, dataPrevistaDevolucao: daqui(-60_000) }, 1),
+      rejeitaCom('backend.emprestimos.devolucao_prevista_invalida'),
     );
     assert.equal(transacoes, 0);
+  });
+
+  it('reaches the transaction for a valid schedule', async () => {
+    const daqui = (ms: number) => new Date(Date.now() + ms).toISOString();
+    await assert.rejects(criarEmprestimo({ ...base, dataRetirada: daqui(3600_000), dataPrevistaDevolucao: daqui(7200_000) }, 1), /transaction reached/);
+    assert.equal(transacoes, 1);
   });
 
   it('accepts a dataRetirada inside the tolerance, a past one and an omitted one (reaches the transaction)', async () => {
@@ -170,6 +199,12 @@ describe('devolverEmprestimo date validation', () => {
     await devolverEmprestimo(5, undefined, 1);
     assert.ok(gravado!.dataDevolucao instanceof Date);
     assert.ok(Math.abs(gravado!.dataDevolucao!.getTime() - Date.now()) < 5000);
+  });
+
+  it('refuses to return a schedule whose pickup was never confirmed', async () => {
+    (emprestimo as { status: string }).status = 'AGENDADO';
+    await assert.rejects(devolverEmprestimo(5, undefined, 1), rejeita('backend.emprestimos.agendamento_nao_confirmado', 409));
+    assert.equal(gravado, null);
   });
 
   it('keeps reporting 409 for an already returned loan, even with an earlier explicit date', async () => {

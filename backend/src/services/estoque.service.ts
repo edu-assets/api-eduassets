@@ -14,8 +14,9 @@ export interface ItemInsuficiente {
 export class EstoqueInsuficienteError extends AppError {
   readonly itens: ItemInsuficiente[];
 
-  constructor(itens: ItemInsuficiente[]) {
-    super(400, `Estoque insuficiente para ${itens.length} equipamento(s).`, { itens });
+  /** `extra` adds fields to the error payload next to `itens` (e.g. agendavel and proximoHorarioLivre). */
+  constructor(itens: ItemInsuficiente[], extra: Record<string, unknown> = {}) {
+    super(400, `Estoque insuficiente para ${itens.length} equipamento(s).`, { itens, ...extra });
     this.name = 'EstoqueInsuficienteError';
     this.itens = itens;
   }

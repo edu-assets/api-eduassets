@@ -178,7 +178,10 @@ describe('criarEmprestimo with an inactive responsavel', () => {
   it('proceeds for an active responsavel', async () => {
     const t = criarTx({
       'responsavel.findUnique': () => ({ ativo: true }),
-      'equipamento.findMany': () => [{ id: 1, modelo: 'T', quantidadeDisponivel: 10, categoria: { nome: 'C' } }],
+      'equipamento.findMany': () => [{ id: 1, modelo: 'T', quantidadeTotal: 10, quantidadeQuebrada: 0, quantidadeDisponivel: 10, categoria: { nome: 'C' } }],
+      // Time-based availability: no open maintenance, no open loans or schedules.
+      'ocorrencia.findMany': () => [],
+      'itemEmprestimo.findMany': () => [],
       'equipamento.updateMany': () => ({ count: 1 }),
       'emprestimo.create': () => ({ id: 1, itens: [] }),
     });

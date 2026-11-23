@@ -30,6 +30,7 @@ export function publicEquipment(value: PublicEquipment) {
 export function publicLoan(value: PublicLoan) {
   return {
     id: value.id, status: value.status, dataRetirada: value.dataRetirada,
+    dataAgendada: value.dataAgendada ?? null, dataPrevistaDevolucao: value.dataPrevistaDevolucao ?? null,
     dataDevolucao: value.dataDevolucao, createdAt: value.createdAt,
     // Personal names, free-text notes and staff identifiers are intentionally withheld.
     solicitanteNome: 'Convidado', observacao: null, responsavelId: null,

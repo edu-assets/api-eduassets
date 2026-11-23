@@ -172,6 +172,17 @@ describe('montarPayload', () => {
     assert.equal(montarPayload({ ...base, tipo: 'OCORRENCIA_REGISTRADA' }).url, '/#panel-controle');
   });
 
+  it('announces a new schedule with the requester, linking to the returns panel', () => {
+    const payload = montarPayload({
+      tipo: 'AGENDAMENTO_CRIADO', autorNome: 'Ana Souza', entidadeId: 31, solicitanteNome: 'João Silva',
+      itens: [{ nome: 'Notebook', quantidade: 15 }],
+    });
+    assert.equal(payload.titulo, 'Novo agendamento');
+    assert.equal(payload.corpo, 'João Silva · Notebook ×15 · por Ana Souza');
+    assert.equal(payload.url, '/#panel-devolucao');
+    assert.equal(payload.tag, 'eduassets-agendamento_criado-31');
+  });
+
   it('limits the summary to 3 names plus "e mais N" and merges repeated names', () => {
     const payload = montarPayload({
       tipo: 'EMPRESTIMO_CRIADO', autorNome: 'Ana', entidadeId: 1,
@@ -243,7 +254,7 @@ describe('notificarEvento delivery', () => {
   let enviados: Array<{ target: PushTarget; payload: string }>;
   let comportamento: (target: PushTarget) => Promise<void>;
 
-  const todas = { EMPRESTIMO_CRIADO: true, DEVOLUCAO_REGISTRADA: true, OCORRENCIA_REGISTRADA: true };
+  const todas = { EMPRESTIMO_CRIADO: true, AGENDAMENTO_CRIADO: true, DEVOLUCAO_REGISTRADA: true, OCORRENCIA_REGISTRADA: true };
   const inscricao = (id: number, usuarioId: number, extra: Partial<Banco['inscricoes'][number]> = {}) => ({
     id, usuarioId, endpoint: `https://fcm.googleapis.com/fcm/send/sub-${id}`, p256dh: P256DH, auth: AUTH,
     ativo: true, admin: true, prefs: { ...todas }, ...extra,

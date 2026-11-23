@@ -21,6 +21,19 @@ emprestimosRouter.patch(
   emprestimosController.atualizarItens
 );
 emprestimosRouter.patch(
+  '/:id/confirmar-retirada',
+  requireAuth,
+  requireIntParam('id'),
+  emprestimosController.confirmarRetirada
+);
+// requireAuth applies the same cookie-mode Origin check to DELETE as to PATCH/POST.
+emprestimosRouter.delete(
+  '/:id',
+  requireAuth,
+  requireIntParam('id'),
+  emprestimosController.excluir
+);
+emprestimosRouter.patch(
   '/:id/devolver',
   requireAuth,
   requireIntParam('id'),

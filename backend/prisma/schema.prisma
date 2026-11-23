@@ -111,6 +111,10 @@ model Emprestimo {
   status          StatusEmprestimo @default(ABERTO)
   dataRetirada    DateTime
   dataDevolucao   DateTime?
+  /// Scheduled start (AGENDADO). Kept after the pickup is confirmed, when dataRetirada becomes the actual pickup time.
+  dataAgendada    DateTime?
+  /// End of the reserved window / expected return. Optional for immediate loans, required while AGENDADO.
+  dataPrevistaDevolucao DateTime?
   observacao      String?
   createdAt       DateTime         @default(now())
   criadoPorId     Int?
@@ -124,6 +128,9 @@ model Emprestimo {
   itens           ItemEmprestimo[]
 
   @@index([status])
+  // Availability checks: future schedules (status = AGENDADO) by start. CHECK constraints on the scheduling dates
+  // live in migration 20261123120000_loan_scheduling.
+  @@index([status, dataAgendada])
   // Loan history pages: ORDER BY "dataRetirada" DESC, id DESC with a keyset cursor and de/ate range filters.
   @@index([dataRetirada, id])
   @@index([criadoPorId])
@@ -179,6 +186,8 @@ enum NivelAcesso {
 enum StatusEmprestimo {
   ABERTO
   DEVOLVIDO
+  /// Future checkout reserving units for [dataAgendada, dataPrevistaDevolucao); becomes ABERTO on pickup confirmation.
+  AGENDADO
 }
 
 enum TipoOcorrencia {

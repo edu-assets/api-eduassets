@@ -16,7 +16,8 @@ test('Guest equipment DTO contains only operational dashboard fields', () => {
 test('Guest loan DTO omits personal names and free-text observations', () => {
   const dto = publicLoan({
     id: 12, solicitanteNome: 'Pessoa sintética', responsavelId: 2,
-    status: 'ABERTO', dataRetirada: new Date(), dataDevolucao: null,
+    status: 'AGENDADO', dataRetirada: new Date('2026-11-24T13:30:00Z'), dataDevolucao: null,
+    dataAgendada: new Date('2026-11-24T13:30:00Z'), dataPrevistaDevolucao: new Date('2026-11-24T14:20:00Z'),
     observacao: 'nota privada', createdAt: new Date(),
     responsavel: { id: 2, nome: 'Funcionário', cargo: 'Coordenação' },
     itens: [{
@@ -26,6 +27,9 @@ test('Guest loan DTO omits personal names and free-text observations', () => {
     }],
   });
   assert.equal(dto.solicitanteNome, 'Convidado');
+  assert.equal(dto.status, 'AGENDADO');
+  assert.equal(dto.dataAgendada?.toISOString(), '2026-11-24T13:30:00.000Z');
+  assert.equal(dto.dataPrevistaDevolucao?.toISOString(), '2026-11-24T14:20:00.000Z');
   assert.equal(dto.observacao, null);
   assert.equal(dto.responsavel, null);
   assert.equal(dto.responsavelId, null);

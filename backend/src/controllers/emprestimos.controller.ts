@@ -44,7 +44,7 @@ export async function criar(req: Request, res: Response): Promise<void> {
   const criado = await emprestimosService.criarEmprestimo(req.body, req.user!.sub);
   // Post-commit and fire-and-forget: push delivery can never delay or fail the request.
   dispararNotificacao({
-    tipo: 'EMPRESTIMO_CRIADO',
+    tipo: criado.status === 'AGENDADO' ? 'AGENDAMENTO_CRIADO' : 'EMPRESTIMO_CRIADO',
     autorId: req.user!.sub,
     entidadeId: criado.id,
     solicitanteNome: criado.solicitanteNome,
@@ -57,6 +57,27 @@ export async function atualizarItens(req: Request, res: Response): Promise<void>
   const id = Number(req.params.id);
   const atualizado = await emprestimosService.atualizarItensEmprestimo(id, req.body.itens, req.user!.sub);
   res.json(atualizado);
+}
+
+/** PATCH /emprestimos/:id/confirmar-retirada (no body): a schedule's units leave the shelf now. */
+export async function confirmarRetirada(req: Request, res: Response): Promise<void> {
+  const id = Number(req.params.id);
+  const confirmado = await emprestimosService.confirmarRetirada(id, req.user!.sub);
+  dispararNotificacao({
+    tipo: 'EMPRESTIMO_CRIADO',
+    autorId: req.user!.sub,
+    entidadeId: confirmado.id,
+    solicitanteNome: confirmado.solicitanteNome,
+    itens: confirmado.itens.map((item) => ({ equipamentoId: item.equipamentoId, quantidade: item.quantidade })),
+  });
+  res.json(confirmado);
+}
+
+/** DELETE /emprestimos/:id: schedules only (AGENDADO). */
+export async function excluir(req: Request, res: Response): Promise<void> {
+  const id = Number(req.params.id);
+  await emprestimosService.excluirAgendamento(id, req.user!.sub);
+  res.status(204).send();
 }
 
 export async function devolver(req: Request, res: Response): Promise<void> {

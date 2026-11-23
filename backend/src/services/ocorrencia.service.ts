@@ -3,6 +3,12 @@ import { writeAuditLog } from '../lib/auditLog.js';
 import { autoriaOcorrenciaInclude } from '../lib/authorship.js';
 import { AppError } from '../errors/AppError.js';
 import { decrementarComSeguranca } from './estoque.service.js';
+import {
+  agendamentosQueNaoCabem,
+  bloquearEquipamentos,
+  carregarDisponibilidade,
+} from './disponibilidade.service.js';
+import type { Prisma } from '@prisma/client';
 
 /** Shape loaded for Guest Mode (projected by publicOccurrence): no authorship. */
 export const ocorrenciaPublicaInclude = {
@@ -45,12 +51,53 @@ export async function listarOcorrenciasPublicas() {
   });
 }
 
+/** A current or future schedule that no longer fits after an occurrence reduced the equipment's capacity. */
+export interface AgendamentoAfetado {
+  id: number;
+  solicitanteNome: string;
+  dataAgendada: Date | null;
+  dataPrevistaDevolucao: Date | null;
+}
+
+/** Schedules of the equipment (window not over yet) that the current capacity can no longer honor. */
+async function listarAgendamentosAfetados(
+  tx: Prisma.TransactionClient,
+  equipamentoId: number,
+  agora: number,
+): Promise<AgendamentoAfetado[]> {
+  const estado = (await carregarDisponibilidade(tx, [equipamentoId], agora)).get(equipamentoId);
+  if (!estado) return [];
+  const fixos = estado.ocupacoes.filter((ocupacao) => ocupacao.status === 'ABERTO');
+  // One entry per schedule (a schedule may hold several lines of the same equipment).
+  const porAgendamento = new Map<number, { emprestimoId: number; inicio: number; fim: number; quantidade: number }>();
+  for (const ocupacao of estado.ocupacoes) {
+    if (ocupacao.status !== 'AGENDADO') continue;
+    const atual = porAgendamento.get(ocupacao.emprestimoId);
+    if (atual) atual.quantidade += ocupacao.quantidade;
+    else porAgendamento.set(ocupacao.emprestimoId, { ...ocupacao });
+  }
+  const ids = agendamentosQueNaoCabem(estado.capacidade, fixos, [...porAgendamento.values()], agora);
+  if (ids.length === 0) return [];
+  return tx.emprestimo.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, solicitanteNome: true, dataAgendada: true, dataPrevistaDevolucao: true },
+    orderBy: [{ dataAgendada: 'asc' }, { id: 'asc' }],
+  });
+}
+
+/**
+ * Creates one occurrence per patrimony number. MANUTENCAO/QUEBRADO take units off the shelf and are never blocked by
+ * schedules; every created occurrence carries `agendamentosAfetados`, the schedules that no longer fit afterwards
+ * (empty for OBSERVACAO), so the app can warn the operator.
+ */
 export async function criarOcorrencias(dados: OcorrenciaCreateInput, actorId: number) {
   const { equipamentoId, tipo, problema, descricao, numeros } = dados;
   const quantidade = numeros.length;
+  const reduzCapacidade = tipo === 'MANUTENCAO' || tipo === 'QUEBRADO';
 
   return runTransaction(async (tx) => {
-    if (tipo === 'MANUTENCAO' || tipo === 'QUEBRADO') {
+    if (reduzCapacidade) {
+      await bloquearEquipamentos(tx, [equipamentoId]);
       await decrementarComSeguranca(tx, new Map([[equipamentoId, quantidade]]));
     }
 
@@ -73,7 +120,8 @@ export async function criarOcorrencias(dados: OcorrenciaCreateInput, actorId: nu
       });
     }
 
-    return criadas;
+    const agendamentosAfetados = reduzCapacidade ? await listarAgendamentosAfetados(tx, equipamentoId, Date.now()) : [];
+    return criadas.map((criada) => ({ ...criada, agendamentosAfetados }));
   });
 }
 

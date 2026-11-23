@@ -3,7 +3,7 @@ import { logger } from '../lib/logger.js';
 import { enviar, isPushConfigured, type PushTarget } from '../lib/webPush.js';
 import { isAllowedPushEndpoint, type PushPreferencias } from '../schemas/notificacao.schema.js';
 
-export type TipoEventoNotificacao = 'EMPRESTIMO_CRIADO' | 'DEVOLUCAO_REGISTRADA' | 'OCORRENCIA_REGISTRADA';
+export type TipoEventoNotificacao = 'EMPRESTIMO_CRIADO' | 'AGENDAMENTO_CRIADO' | 'DEVOLUCAO_REGISTRADA' | 'OCORRENCIA_REGISTRADA';
 export type TipoOcorrenciaNotificacao = 'OBSERVACAO' | 'MANUTENCAO' | 'QUEBRADO';
 
 export interface EventoNotificacao {
@@ -41,9 +41,13 @@ const MAX_NOMES_NO_RESUMO = 3;
 const MAX_LENGTH_NOME = 40;
 const MAX_LENGTH_AUTOR = 60;
 const BATCH_SIZE = 10;
-/** Where the notification click lands, per event type (loans and returns live in the dashboard history). */
+/**
+ * Where the notification click lands, per event type (loans and returns live in the dashboard history; schedules are
+ * confirmed from the returns panel).
+ */
 const URL_POR_TIPO: Record<TipoEventoNotificacao, string> = {
   EMPRESTIMO_CRIADO: '/#panel-dashboard',
+  AGENDAMENTO_CRIADO: '/#panel-devolucao',
   DEVOLUCAO_REGISTRADA: '/#panel-dashboard',
   OCORRENCIA_REGISTRADA: '/#panel-controle',
 };
@@ -51,6 +55,7 @@ const URL_TESTE = '/#panel-inicio';
 
 const TITULOS: Record<TipoEventoNotificacao, string> = {
   EMPRESTIMO_CRIADO: 'Novo empréstimo',
+  AGENDAMENTO_CRIADO: 'Novo agendamento',
   DEVOLUCAO_REGISTRADA: 'Devolução registrada',
   OCORRENCIA_REGISTRADA: 'Nova ocorrência',
 };
@@ -138,8 +143,10 @@ export interface NotificacaoRepository {
   marcarSucesso(id: number, em: Date): Promise<void>;
 }
 
+/** Schedules share the loan preference (no separate opt-in). */
 const CAMPO_PREFERENCIA = {
   EMPRESTIMO_CRIADO: 'notificarEmprestimo',
+  AGENDAMENTO_CRIADO: 'notificarEmprestimo',
   DEVOLUCAO_REGISTRADA: 'notificarDevolucao',
   OCORRENCIA_REGISTRADA: 'notificarOcorrencia',
 } as const;

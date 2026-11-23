@@ -9,7 +9,10 @@ export const itemEmprestimoSchema = z.object({
 export const emprestimoCreateSchema = z.object({
   solicitanteNome: z.string().trim().min(1, 'Nome do solicitante é obrigatório.').max(150),
   responsavelId: positiveDatabaseIdSchema,
+  /** Beyond now + 5 min (server clock) the request creates a schedule (AGENDADO) instead of an immediate loan. */
   dataRetirada: z.string().min(1).max(64).refine((v) => !Number.isNaN(Date.parse(v)), 'Data inválida.').optional(),
+  /** Expected return (end of the reserved window): required for schedules, optional for immediate loans. */
+  dataPrevistaDevolucao: z.string().max(40).datetime({ offset: true }).nullish().transform((v) => v ?? undefined),
   observacao: z.string().max(2000).optional(),
   itens: z.array(itemEmprestimoSchema).min(1, 'É necessário informar ao menos um item.').max(100, 'O empréstimo pode conter no máximo 100 itens.'),
 });
@@ -48,7 +51,8 @@ export const emprestimoListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.coerce.number().int().positive().max(MAX_DATABASE_INT).optional(),
   paginado: z.enum(['1', 'true']).transform(() => true as const).optional(),
-  status: z.enum(['ABERTO', 'DEVOLVIDO']).optional(),
+  /** ATIVO = ABERTO or AGENDADO. */
+  status: z.enum(['AGENDADO', 'ABERTO', 'DEVOLVIDO', 'ATIVO']).optional(),
   de: limiteDataRetirada(false).optional(),
   ate: limiteDataRetirada(true).optional(),
   /** Case-insensitive substring of solicitanteNome, responsavel.nome or an item's equipment modelo; blank = no filter. */

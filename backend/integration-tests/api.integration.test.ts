@@ -664,3 +664,124 @@ test('a committed mutation is reported by /sync/estado without querying the audi
   const again = await api(`/sync/estado?desde=${after.body.cursor}`, {}, adminToken);
   assert.deepEqual(again.body.entidades, []);
 });
+
+test('loan scheduling: time-based availability, confirmation, deletion and capacity guards', async () => {
+  const minuto = 60_000;
+  const daqui = (ms: number) => new Date(Date.now() + ms).toISOString();
+  const novoEquipamento = async (modelo: string, total: number) => {
+    const equipamento = await prisma.equipamento.create({
+      data: { categoriaId: rows.categoryId!, modelo: `${modelo} ${marker}`, quantidadeTotal: total, quantidadeDisponivel: total },
+    });
+    rows.extraEquipmentIds.push(equipamento.id);
+    return equipamento.id;
+  };
+  const criar = async (equipamentoId: number, quantidade: number, extra: Json = {}) => {
+    const result = await api('/emprestimos', json('POST', {
+      solicitanteNome: `Synthetic schedule ${marker}`, responsavelId: rows.responsibleId,
+      itens: [{ equipamentoId, quantidade }], ...extra,
+    }), adminToken);
+    if (result.status === 201) rows.loanIds.push(result.body.id);
+    return result;
+  };
+  const disponivel = async (id: number) => (await prisma.equipamento.findUniqueOrThrow({ where: { id } })).quantidadeDisponivel;
+
+  // 20 notebooks: 15 at +30min..+80min ("10:30–11:20") and 15 at +4h..+5h ("14:00–15:00") both fit.
+  const notebooks = await novoEquipamento('Synthetic notebooks', 20);
+  const manha = await criar(notebooks, 15, { dataRetirada: daqui(30 * minuto), dataPrevistaDevolucao: daqui(80 * minuto) });
+  assert.equal(manha.status, 201);
+  assert.equal(manha.body.status, 'AGENDADO');
+  assert.equal(manha.body.dataAgendada, manha.body.dataRetirada);
+  const tarde = await criar(notebooks, 15, { dataRetirada: daqui(240 * minuto), dataPrevistaDevolucao: daqui(300 * minuto) });
+  assert.equal(tarde.status, 201);
+  assert.equal(await disponivel(notebooks), 20, 'schedules never touch the shelf count');
+
+  // A schedule needs an expected return and must start within 15 days.
+  assert.equal((await criar(notebooks, 1, { dataRetirada: daqui(60 * minuto) })).body.erro, 'backend.emprestimos.devolucao_prevista_obrigatoria');
+  assert.equal((await criar(notebooks, 1, { dataRetirada: daqui(16 * 24 * 60 * minuto), dataPrevistaDevolucao: daqui(16 * 24 * 60 * minuto + 60 * minuto) })).body.erro,
+    'backend.emprestimos.data_retirada_alem_horizonte');
+
+  // Immediate 10 until +60min overlaps the morning reservation: blocked, but schedulable right after it ends.
+  const bloqueado = await criar(notebooks, 10, { dataPrevistaDevolucao: daqui(60 * minuto) });
+  assert.equal(bloqueado.status, 400);
+  assert.equal(bloqueado.body.itens[0].disponivel, 5);
+  assert.equal(bloqueado.body.agendavel, true);
+  assert.equal(bloqueado.body.proximoHorarioLivre, manha.body.dataPrevistaDevolucao);
+  // 5 units still fit immediately.
+  const cinco = await criar(notebooks, 5, { dataPrevistaDevolucao: daqui(60 * minuto) });
+  assert.equal(cinco.status, 201);
+  assert.equal(cinco.body.status, 'ABERTO');
+  assert.equal((await api(`/emprestimos/${cinco.body.id}/devolver`, json('PATCH', {}), adminToken)).status, 200);
+
+  // Status filters.
+  const agendados = await api('/emprestimos?status=AGENDADO', {}, adminToken);
+  assert.ok(agendados.body.every((item: Json) => item.status === 'AGENDADO'));
+  assert.ok(agendados.body.some((item: Json) => item.id === manha.body.id));
+  const ativosConvidado = await api('/emprestimos?status=ATIVO&limit=100');
+  assert.equal(ativosConvidado.status, 200);
+  assert.ok(ativosConvidado.body.items.every((item: Json) => item.status === 'ABERTO' || item.status === 'AGENDADO'));
+  const manhaPublica = ativosConvidado.body.items.find((item: Json) => item.id === manha.body.id);
+  assert.equal(manhaPublica?.dataPrevistaDevolucao, manha.body.dataPrevistaDevolucao);
+
+  // A schedule cannot be returned or edited before its pickup is confirmed.
+  const devolverAgendado = await api(`/emprestimos/${manha.body.id}/devolver`, json('PATCH', {}), adminToken);
+  assert.equal(devolverAgendado.status, 409);
+  assert.equal(devolverAgendado.body.erro, 'backend.emprestimos.agendamento_nao_confirmado');
+  assert.equal((await api(`/emprestimos/${manha.body.id}`, json('PATCH', { itens: [{ equipamentoId: notebooks, quantidade: 1 }] }), adminToken)).status, 409);
+
+  // Confirm (30 min early is allowed): units leave the shelf, dataRetirada becomes the actual pickup time.
+  const confirmado = await api(`/emprestimos/${manha.body.id}/confirmar-retirada`, json('PATCH'), adminToken);
+  assert.equal(confirmado.status, 200);
+  assert.equal(confirmado.body.status, 'ABERTO');
+  assert.equal(confirmado.body.dataAgendada, manha.body.dataAgendada);
+  assert.ok(Date.parse(confirmado.body.dataRetirada) < Date.parse(manha.body.dataAgendada));
+  assert.equal(await disponivel(notebooks), 5);
+  assert.equal((await api(`/emprestimos/${manha.body.id}/confirmar-retirada`, json('PATCH'), adminToken)).body.erro, 'backend.emprestimos.nao_agendado');
+  const excluirAberto = await api(`/emprestimos/${manha.body.id}`, json('DELETE'), adminToken);
+  assert.equal(excluirAberto.status, 409);
+  assert.equal(excluirAberto.body.erro, 'backend.emprestimos.nao_excluivel');
+  assert.equal((await api(`/emprestimos/${manha.body.id}/devolver`, json('PATCH', {}), adminToken)).status, 200);
+
+  // The admin cannot lower the capacity below the afternoon reservation.
+  const reduzir = await api(`/equipamentos/${notebooks}`, json('PATCH', { quantidadeTotal: 10 }), adminToken);
+  assert.equal(reduzir.status, 409);
+  assert.equal(reduzir.body.erro, 'backend.equipamentos.quantidade_reservada');
+
+  // Deleting a schedule: 204, no stock change.
+  assert.equal((await api(`/emprestimos/${tarde.body.id}`, json('DELETE'), adminToken)).status, 204);
+  assert.equal(await prisma.emprestimo.findUnique({ where: { id: tarde.body.id } }), null);
+  assert.equal(await disponivel(notebooks), 20);
+  assert.equal((await api(`/emprestimos/${tarde.body.id}`, json('DELETE'), adminToken)).status, 404);
+  assert.equal((await api(`/equipamentos/${notebooks}`, json('PATCH', { quantidadeTotal: 10 }), adminToken)).status, 200);
+
+  // Confirmation blocked by an overdue loan, then allowed after the late return.
+  const projetores = await novoEquipamento('Synthetic projectors', 5);
+  const agendamento = await criar(projetores, 5, { dataRetirada: daqui(10 * minuto), dataPrevistaDevolucao: daqui(70 * minuto) });
+  assert.equal(agendamento.status, 201);
+  const curto = await criar(projetores, 5, { dataPrevistaDevolucao: daqui(5 * minuto) });
+  assert.equal(curto.status, 201);
+  // Simulate the short loan becoming overdue (dates moved into the past, keeping prevista > retirada).
+  await prisma.emprestimo.update({
+    where: { id: curto.body.id },
+    data: { dataRetirada: new Date(Date.now() - 120 * minuto), dataPrevistaDevolucao: new Date(Date.now() - 60 * minuto) },
+  });
+  const pendente = await api(`/emprestimos/${agendamento.body.id}/confirmar-retirada`, json('PATCH'), adminToken);
+  assert.equal(pendente.status, 409);
+  assert.equal(pendente.body.erro, 'backend.emprestimos.unidades_nao_devolvidas');
+  assert.equal(pendente.body.itens[0].equipamentoId, projetores);
+  assert.deepEqual(pendente.body.emprestimosPendentes.map((item: Json) => item.id), [curto.body.id]);
+  assert.equal((await api(`/emprestimos/${curto.body.id}/devolver`, json('PATCH', {}), adminToken)).status, 200);
+  const aposDevolucao = await api(`/emprestimos/${agendamento.body.id}/confirmar-retirada`, json('PATCH'), adminToken);
+  assert.equal(aposDevolucao.status, 200);
+  assert.equal(await disponivel(projetores), 0);
+  assert.equal((await api(`/emprestimos/${agendamento.body.id}/devolver`, json('PATCH', {}), adminToken)).status, 200);
+
+  // Two concurrent schedules for the last units: exactly one succeeds.
+  const tablets = await novoEquipamento('Synthetic tablets', 5);
+  const janela = { dataRetirada: daqui(120 * minuto), dataPrevistaDevolucao: daqui(180 * minuto) };
+  const [primeiro, segundo] = await Promise.all([criar(tablets, 5, janela), criar(tablets, 5, janela)]);
+  assert.deepEqual([primeiro.status, segundo.status].sort(), [201, 400]);
+  const perdedor = primeiro.status === 400 ? primeiro : segundo;
+  assert.equal(perdedor.body.itens[0].disponivel, 0);
+  assert.equal(perdedor.body.agendavel, true);
+  assert.equal(await prisma.emprestimo.count({ where: { status: 'AGENDADO', itens: { some: { equipamentoId: tablets } } } }), 1);
+});

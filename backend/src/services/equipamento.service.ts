@@ -2,6 +2,7 @@ import { prisma, runTransaction } from '../lib/prisma.js';
 import { writeAuditLog } from '../lib/auditLog.js';
 import { autoriaEquipamentoInclude } from '../lib/authorship.js';
 import { AppError } from '../errors/AppError.js';
+import { carregarDisponibilidade, picoOcupacao } from './disponibilidade.service.js';
 
 export interface EquipamentoCreateInput {
   categoriaId: number;
@@ -75,6 +76,18 @@ export async function atualizarEquipamento(id: number, dados: EquipamentoUpdateI
     if (quebradaFinal < ocorrenciasQuebradasAbertas ||
         disponivelFinal + quebradaFinal + quantidadeEmprestada + manutencoesAbertas > totalFinal) {
       throw new AppError(409, 'backend.equipamentos.quantidade_em_uso');
+    }
+
+    // A capacity drop must still cover the peak occupation of open loans and schedules from now on (the row lock
+    // above serializes this with schedule creation).
+    const capacidadeAtual = atual.quantidadeTotal - atual.quantidadeQuebrada - manutencoesAbertas;
+    const capacidadeFinal = totalFinal - quebradaFinal - manutencoesAbertas;
+    if (capacidadeFinal < capacidadeAtual) {
+      const agora = Date.now();
+      const ocupacoes = (await carregarDisponibilidade(tx, [id], agora)).get(id)?.ocupacoes ?? [];
+      if (capacidadeFinal < picoOcupacao(ocupacoes, { inicio: agora, fim: Number.POSITIVE_INFINITY })) {
+        throw new AppError(409, 'backend.equipamentos.quantidade_reservada');
+      }
     }
 
     const atualizado = await tx.equipamento.update({
