@@ -73,10 +73,10 @@ export async function confirmarRetirada(req: Request, res: Response): Promise<vo
   res.json(confirmado);
 }
 
-/** DELETE /emprestimos/:id: schedules only (AGENDADO). */
+/** DELETE /emprestimos/:id: schedules (AGENDADO) and open loans (ABERTO, EDITOR limited to 24h). */
 export async function excluir(req: Request, res: Response): Promise<void> {
   const id = Number(req.params.id);
-  await emprestimosService.excluirAgendamento(id, req.user!.sub);
+  await emprestimosService.excluirEmprestimo(id, { id: req.user!.sub, nivelAcesso: req.user!.nivelAcesso });
   res.status(204).send();
 }
 

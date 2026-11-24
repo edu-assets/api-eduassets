@@ -736,10 +736,22 @@ test('loan scheduling: time-based availability, confirmation, deletion and capac
   assert.ok(Date.parse(confirmado.body.dataRetirada) < Date.parse(manha.body.dataAgendada));
   assert.equal(await disponivel(notebooks), 5);
   assert.equal((await api(`/emprestimos/${manha.body.id}/confirmar-retirada`, json('PATCH'), adminToken)).body.erro, 'backend.emprestimos.nao_agendado');
-  const excluirAberto = await api(`/emprestimos/${manha.body.id}`, json('DELETE'), adminToken);
-  assert.equal(excluirAberto.status, 409);
-  assert.equal(excluirAberto.body.erro, 'backend.emprestimos.nao_excluivel');
   assert.equal((await api(`/emprestimos/${manha.body.id}/devolver`, json('PATCH', {}), adminToken)).status, 200);
+  // Returned loans keep their history.
+  const excluirDevolvido = await api(`/emprestimos/${manha.body.id}`, json('DELETE'), adminToken);
+  assert.equal(excluirDevolvido.status, 409);
+  assert.equal(excluirDevolvido.body.erro, 'backend.emprestimos.nao_excluivel');
+
+  // Deleting an open loan registered by mistake gives its units back to stock.
+  const camera = await novoEquipamento('Synthetic cameras', 4);
+  const engano = await criar(camera, 3, { dataPrevistaDevolucao: daqui(60 * minuto) });
+  assert.equal(engano.status, 201);
+  assert.equal(engano.body.status, 'ABERTO');
+  assert.equal(await disponivel(camera), 1);
+  assert.equal((await api(`/emprestimos/${engano.body.id}`, json('DELETE'), adminToken)).status, 204);
+  assert.equal(await prisma.emprestimo.findUnique({ where: { id: engano.body.id } }), null);
+  assert.equal(await disponivel(camera), 4);
+  assert.equal((await api(`/emprestimos/${engano.body.id}`, json('DELETE'), adminToken)).status, 404);
 
   // The admin cannot lower the capacity below the afternoon reservation.
   const reduzir = await api(`/equipamentos/${notebooks}`, json('PATCH', { quantidadeTotal: 10 }), adminToken);

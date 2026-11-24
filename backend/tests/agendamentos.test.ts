@@ -22,7 +22,8 @@ import {
   TOLERANCIA_DATA_FUTURA_MS,
   confirmarRetirada,
   criarEmprestimo,
-  excluirAgendamento,
+  JANELA_EXCLUSAO_EMPRESTIMO_MS,
+  excluirEmprestimo,
   planejarRetirada,
   validarJanelaConfirmacao,
 } from '../src/services/emprestimo.service.js';
@@ -424,10 +425,25 @@ describe('confirmarRetirada', () => {
   });
 });
 
-describe('excluirAgendamento', () => {
-  it('deletes a schedule and its items with a DELETE audit row', async () => {
-    const t = criarTx({ 'emprestimo.findUnique': () => ({ status: 'AGENDADO' }) });
-    await excluirAgendamento(9, 3);
+describe('excluirEmprestimo', () => {
+  const admin = { id: 3, nivelAcesso: 'ADMINISTRADOR' };
+  const editor = { id: 4, nivelAcesso: 'EDITOR' };
+  const ha = (ms: number) => new Date(Date.now() - ms);
+  const aberto = (createdAgo: number, retiradaAgo: number) => ({
+    status: 'ABERTO', createdAt: ha(createdAgo), dataRetirada: ha(retiradaAgo),
+    itens: [{ equipamentoId: 7, quantidade: 2 }, { equipamentoId: 2, quantidade: 3 }, { equipamentoId: 7, quantidade: 1 }],
+  });
+  const semMudancas = (t: ReturnType<typeof criarTx>) => {
+    assert.equal(t.todas('equipamento.update').length, 0);
+    assert.equal(t.todas('itemEmprestimo.deleteMany').length, 0);
+    assert.equal(t.todas('emprestimo.delete').length, 0);
+    assert.equal(t.todas('auditLog.create').length, 0);
+  };
+  const rejeita = (status: number, chave: string) => (e: unknown) => e instanceof AppError && e.status === status && e.chaveI18n === chave;
+
+  it('deletes a schedule and its items with a DELETE audit row, without touching stock', async () => {
+    const t = criarTx({ 'emprestimo.findUnique': () => ({ status: 'AGENDADO', itens: [{ equipamentoId: 1, quantidade: 5 }] }) });
+    await excluirEmprestimo(9, editor);
     assert.deepEqual(t.todas('itemEmprestimo.deleteMany')[0].where, { emprestimoId: 9 });
     assert.deepEqual(t.todas('emprestimo.delete')[0].where, { id: 9 });
     const [audit] = t.todas('auditLog.create');
@@ -436,11 +452,67 @@ describe('excluirAgendamento', () => {
     assert.equal(t.todas('equipamento.update').length + t.todas('equipamento.updateMany').length, 0);
   });
 
-  it('refuses open or returned loans (409) and unknown ids (404)', async () => {
-    criarTx({ 'emprestimo.findUnique': () => ({ status: 'ABERTO' }) });
-    await assert.rejects(excluirAgendamento(9, 3), (e: unknown) => e instanceof AppError && e.status === 409 && e.chaveI18n === 'backend.emprestimos.nao_excluivel');
+  it('an open loan goes back to stock per item (ordered by equipment) and writes the DELETE audit row', async () => {
+    const t = criarTx({ 'emprestimo.findUnique': () => aberto(H, H) });
+    await excluirEmprestimo(9, admin);
+    const updates = t.todas('equipamento.update');
+    assert.deepEqual(updates.map((u) => [u.where.id, u.data.quantidadeDisponivel]), [
+      [2, { increment: 3 }], [7, { increment: 2 }], [7, { increment: 1 }],
+    ]);
+    assert.deepEqual(t.todas('itemEmprestimo.deleteMany')[0].where, { emprestimoId: 9 });
+    assert.deepEqual(t.todas('emprestimo.delete')[0].where, { id: 9 });
+    const [audit] = t.todas('auditLog.create');
+    assert.equal(audit.data.action, 'DELETE');
+    assert.equal(audit.data.entity, 'Emprestimo');
+    assert.equal(audit.data.userId ?? audit.data.usuarioId ?? 3, 3);
+  });
+
+  it('an EDITOR may delete an open loan within 24h', async () => {
+    const t = criarTx({ 'emprestimo.findUnique': () => aberto(23 * H, 23 * H) });
+    await excluirEmprestimo(9, editor);
+    assert.equal(t.todas('emprestimo.delete').length, 1);
+    assert.equal(t.todas('equipamento.update').length, 3);
+  });
+
+  it('an EDITOR after 24h gets 403 and nothing changes', async () => {
+    const t = criarTx({ 'emprestimo.findUnique': () => aberto(25 * H, 25 * H) });
+    await assert.rejects(excluirEmprestimo(9, editor), rejeita(403, 'backend.emprestimos.exclusao_fora_do_prazo'));
+    semMudancas(t);
+  });
+
+  it('an ADMINISTRADOR may delete an open loan after 24h', async () => {
+    const t = criarTx({ 'emprestimo.findUnique': () => aberto(30 * 24 * H, 30 * 24 * H) });
+    await excluirEmprestimo(9, admin);
+    assert.equal(t.todas('emprestimo.delete').length, 1);
+    assert.equal(t.todas('equipamento.update').length, 3);
+  });
+
+  it('the window counts from the latest of createdAt and dataRetirada', async () => {
+    // Registered 3 days ago but the pickup was confirmed 1h ago (schedule confirmed): still inside the window.
+    const t = criarTx({ 'emprestimo.findUnique': () => aberto(3 * 24 * H, H) });
+    await excluirEmprestimo(9, editor);
+    assert.equal(t.todas('emprestimo.delete').length, 1);
+    // Picked up 3 days ago but created 1h ago (backdated pickup): still inside the window.
+    const t2 = criarTx({ 'emprestimo.findUnique': () => aberto(H, 3 * 24 * H) });
+    await excluirEmprestimo(9, editor);
+    assert.equal(t2.todas('emprestimo.delete').length, 1);
+    // Both older than the limit (the later one decides): refused.
+    criarTx({ 'emprestimo.findUnique': () => aberto(JANELA_EXCLUSAO_EMPRESTIMO_MS + MIN, JANELA_EXCLUSAO_EMPRESTIMO_MS + 2 * H) });
+    await assert.rejects(excluirEmprestimo(9, editor), rejeita(403, 'backend.emprestimos.exclusao_fora_do_prazo'));
+  });
+
+  it('the window does not apply to schedules', async () => {
+    const t = criarTx({ 'emprestimo.findUnique': () => ({ status: 'AGENDADO', createdAt: ha(10 * 24 * H), dataRetirada: ha(9 * 24 * H), itens: [] }) });
+    await excluirEmprestimo(9, editor);
+    assert.equal(t.todas('emprestimo.delete').length, 1);
+  });
+
+  it('refuses returned loans (409) and unknown ids (404)', async () => {
+    const t = criarTx({ 'emprestimo.findUnique': () => ({ status: 'DEVOLVIDO', createdAt: ha(H), dataRetirada: ha(H), itens: [] }) });
+    await assert.rejects(excluirEmprestimo(9, admin), rejeita(409, 'backend.emprestimos.nao_excluivel'));
+    semMudancas(t);
     criarTx({ 'emprestimo.findUnique': () => null });
-    await assert.rejects(excluirAgendamento(9, 3), (e: unknown) => e instanceof AppError && e.status === 404 && e.chaveI18n === 'backend.emprestimos.nao_encontrado');
+    await assert.rejects(excluirEmprestimo(9, admin), rejeita(404, 'backend.emprestimos.nao_encontrado'));
   });
 });
 

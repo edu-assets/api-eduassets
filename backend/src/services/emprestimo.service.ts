@@ -472,17 +472,46 @@ export async function confirmarRetirada(id: number, actorId: number) {
   });
 }
 
-/** DELETE /emprestimos/:id: only schedules can be deleted (no stock was ever moved for them). */
-export async function excluirAgendamento(id: number, actorId: number): Promise<void> {
+/** An EDITOR may delete an open loan only within this long after it was registered (ADMINISTRADOR has no limit). */
+export const JANELA_EXCLUSAO_EMPRESTIMO_MS = 24 * 60 * 60 * 1000;
+
+const CAMPOS_AUDITORIA_EXCLUSAO = ['solicitanteNome', 'responsavelId', 'status', 'dataRetirada', 'dataAgendada', 'dataPrevistaDevolucao', 'observacao', 'itens'];
+
+/**
+ * DELETE /emprestimos/:id: removes a loan registered by mistake.
+ * - AGENDADO: items and loan are deleted; no stock was ever moved for a schedule.
+ * - ABERTO: same, and the loan's units go back to stock. An EDITOR may do it only within 24h of
+ *   max(createdAt, dataRetirada); ADMINISTRADOR has no limit.
+ * - DEVOLVIDO: 409 nao_excluivel (history is kept).
+ * The loan row is locked first and the status re-read inside the transaction, so a concurrent return or delete
+ * cannot restore stock twice (the loser sees a missing row / non-ABERTO status).
+ */
+export async function excluirEmprestimo(id: number, actor: { id: number; nivelAcesso: string }): Promise<void> {
   await runTransaction(async (tx) => {
     await tx.$queryRaw<Array<{ id: number }>>`SELECT id FROM "Emprestimo" WHERE id = ${id} FOR UPDATE`;
-    const agendamento = await tx.emprestimo.findUnique({ where: { id }, select: { status: true } });
-    if (!agendamento) throw new AppError(404, 'backend.emprestimos.nao_encontrado');
-    if (agendamento.status !== 'AGENDADO') throw new AppError(409, 'backend.emprestimos.nao_excluivel');
+    const emprestimo = await tx.emprestimo.findUnique({ where: { id }, include: { itens: true } });
+    if (!emprestimo) throw new AppError(404, 'backend.emprestimos.nao_encontrado');
+    if (emprestimo.status === 'DEVOLVIDO') throw new AppError(409, 'backend.emprestimos.nao_excluivel');
+
+    if (emprestimo.status === 'ABERTO') {
+      // Fail closed: only ADMINISTRADOR is exempt, so any other or future role gets the 24h window.
+      if (actor.nivelAcesso !== 'ADMINISTRADOR') {
+        const registradoEm = Math.max(emprestimo.createdAt.getTime(), emprestimo.dataRetirada.getTime());
+        if (Date.now() - registradoEm > JANELA_EXCLUSAO_EMPRESTIMO_MS) {
+          throw new AppError(403, 'backend.emprestimos.exclusao_fora_do_prazo');
+        }
+      }
+      await bloquearEquipamentos(tx, agruparQuantidades(emprestimo.itens).keys());
+      for (const item of [...emprestimo.itens].sort((a, b) => a.equipamentoId - b.equipamentoId)) {
+        await tx.equipamento.update({
+          where: { id: item.equipamentoId },
+          data: { quantidadeDisponivel: { increment: item.quantidade } },
+        });
+      }
+    }
 
     await tx.itemEmprestimo.deleteMany({ where: { emprestimoId: id } });
     await tx.emprestimo.delete({ where: { id } });
-    await writeAuditLog(tx, actorId, 'DELETE', 'Emprestimo', id,
-      ['solicitanteNome', 'responsavelId', 'status', 'dataRetirada', 'dataAgendada', 'dataPrevistaDevolucao', 'observacao', 'itens']);
+    await writeAuditLog(tx, actor.id, 'DELETE', 'Emprestimo', id, CAMPOS_AUDITORIA_EXCLUSAO);
   });
 }
